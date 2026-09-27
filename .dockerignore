@@ -1,0 +1,17 @@
+# Build context: only what the image build needs. Never ship local data or secrets.
+node_modules
+dist
+dist-server
+data
+library
+.git
+.claude
+.env
+.env.*
+**/secret.key
+*.db
+*.db-wal
+*.db-shm
+*.log
+.DS_Store
+dist-nas

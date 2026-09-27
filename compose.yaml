@@ -1,0 +1,20 @@
+# docker compose up -d   →   http://<nas-ip>:5663
+services:
+  kmoesync:
+    image: ghcr.io/benis-me/kmoe-sync:latest
+    # Or build it yourself from this repository: `docker compose build`.
+    build: .
+    container_name: kmoesync
+    restart: unless-stopped
+    ports:
+      - "5663:8080"   # NAS port 5663 ("KMOE" on a phone keypad) → the app's port 8080 in the container
+    environment:
+      TZ: Asia/Shanghai
+      # Files are written as this user/group (Synology is often 1026:100, Unraid 99:100). Remove to run as root.
+      PUID: "1000"
+      PGID: "1000"
+      # Behind an HTTPS reverse proxy, mark the login cookie Secure:
+      # KMOESYNC_SECURE_COOKIES: "1"
+    volumes:
+      - ./data:/data            # database, encrypted Kmoe session, cover cache
+      - /path/to/comics:/library # your comic library (local targets live under here)

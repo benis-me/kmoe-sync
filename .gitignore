@@ -1,0 +1,10 @@
+node_modules/
+/dist/
+/dist-server/
+/data/
+/library/
+.env
+*.log
+.DS_Store
+/dist-nas/
+.claude/

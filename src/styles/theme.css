@@ -1,0 +1,211 @@
+/* Light or dark by <html data-theme>: index.html sets it before the first paint from the sidebar switch's choice, or else
+   from the system (and keeps following the system until a choice is made). */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* 墨与纸 · Ink & Paper — warm paper, ink type, one vermilion seal accent. */
+:root, :host {
+  color-scheme: light;
+  --app-font: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --mono-font: "Geist Mono Variable", ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --radius: 0.625rem;
+
+  --background: oklch(0.974 0.006 85);
+  --foreground: oklch(0.21 0.014 265);
+  --card: oklch(0.995 0.003 85);
+  --card-foreground: oklch(0.21 0.014 265);
+  --popover: oklch(0.995 0.003 85);
+  --popover-foreground: oklch(0.21 0.014 265);
+  --primary: oklch(0.23 0.016 265);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --secondary: oklch(0.942 0.008 85);
+  --secondary-foreground: oklch(0.23 0.016 265);
+  --muted: oklch(0.948 0.007 85);
+  --muted-foreground: oklch(0.47 0.013 265);
+  --accent: oklch(0.936 0.009 85);
+  --accent-foreground: oklch(0.21 0.014 265);
+  --destructive: oklch(0.54 0.2 25);
+  --destructive-foreground: oklch(0.985 0.004 85);
+  --border: oklch(0.9 0.008 85);
+  --input: oklch(0.86 0.01 85);
+  --ring: oklch(0.42 0.02 265);
+
+  /* 朱 seal: the single accent — main CTA, selection, progress, active marks. */
+  --seal: oklch(0.55 0.19 36);
+  --seal-foreground: oklch(0.99 0.004 85);
+  --seal-soft: oklch(0.95 0.03 45);
+  --success: oklch(0.5 0.11 155);
+  --success-soft: oklch(0.945 0.035 155);
+  --warning: oklch(0.52 0.12 70);
+  --warning-soft: oklch(0.955 0.05 88);
+  --tone: oklch(0.21 0.014 265 / 0.13);
+  --shadow-ink: 265 25% 12%;
+
+  --sidebar: oklch(0.962 0.007 85);
+  --sidebar-foreground: oklch(0.21 0.014 265);
+  --sidebar-primary: oklch(0.23 0.016 265);
+  --sidebar-primary-foreground: oklch(0.985 0.004 85);
+  --sidebar-accent: oklch(0.93 0.009 85);
+  --sidebar-accent-foreground: oklch(0.21 0.014 265);
+  --sidebar-border: oklch(0.9 0.008 85);
+  --sidebar-ring: oklch(0.42 0.02 265);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: oklch(0.17 0.008 265);
+  --foreground: oklch(0.94 0.006 85);
+  --card: oklch(0.205 0.009 265);
+  --card-foreground: oklch(0.94 0.006 85);
+  --popover: oklch(0.225 0.01 265);
+  --popover-foreground: oklch(0.94 0.006 85);
+  --primary: oklch(0.93 0.008 85);
+  --primary-foreground: oklch(0.2 0.012 265);
+  --secondary: oklch(0.26 0.01 265);
+  --secondary-foreground: oklch(0.94 0.006 85);
+  --muted: oklch(0.245 0.01 265);
+  --muted-foreground: oklch(0.71 0.012 265);
+  --accent: oklch(0.275 0.011 265);
+  --accent-foreground: oklch(0.94 0.006 85);
+  --destructive: oklch(0.7 0.18 25);
+  --destructive-foreground: oklch(0.2 0.012 265);
+  --border: oklch(0.3 0.01 265);
+  --input: oklch(0.36 0.012 265);
+  --ring: oklch(0.72 0.02 265);
+  --seal: oklch(0.69 0.17 40);
+  --seal-foreground: oklch(0.18 0.01 265);
+  --seal-soft: oklch(0.3 0.06 40);
+  --success: oklch(0.76 0.13 155);
+  --success-soft: oklch(0.29 0.05 155);
+  --warning: oklch(0.82 0.13 80);
+  --warning-soft: oklch(0.3 0.05 80);
+  --tone: oklch(0.94 0.006 85 / 0.1);
+  --shadow-ink: 265 40% 2%;
+  --sidebar: oklch(0.19 0.009 265);
+  --sidebar-foreground: oklch(0.94 0.006 85);
+  --sidebar-primary: oklch(0.93 0.008 85);
+  --sidebar-primary-foreground: oklch(0.2 0.012 265);
+  --sidebar-accent: oklch(0.26 0.01 265);
+  --sidebar-accent-foreground: oklch(0.94 0.006 85);
+  --sidebar-border: oklch(0.3 0.01 265);
+  --sidebar-ring: oklch(0.72 0.02 265);
+}
+
+@theme inline {
+  /* Line heights as lengths, not ratios: text in an arbitrary size (13px, 11px…) then inherits a whole-pixel line height.
+     A fractional one (13px × 1.43) lets Chrome round the half-leading down, which lifts the text off its icon's centre. */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --font-sans: var(--app-font);
+  --font-mono: var(--mono-font);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-seal: var(--seal);
+  --color-seal-foreground: var(--seal-foreground);
+  --color-seal-soft: var(--seal-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  /* Motion: strong ease-out for entrances, ease-in-out for on-screen movement. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --shadow-soft: 0 1px 2px hsl(var(--shadow-ink) / 0.05), 0 1px 1px hsl(var(--shadow-ink) / 0.03);
+  --shadow-float: 0 1px 2px hsl(var(--shadow-ink) / 0.08), 0 8px 24px -6px hsl(var(--shadow-ink) / 0.18);
+  --shadow-panel: 0 2px 6px hsl(var(--shadow-ink) / 0.06), 0 30px 80px -24px hsl(var(--shadow-ink) / 0.42);
+
+  --animate-rise: rise 280ms var(--ease-out-strong) both;
+  --animate-pop: pop 200ms var(--ease-out-strong) both;
+  --animate-stripes: stripes 900ms linear infinite;
+  --animate-tick: tick 220ms var(--ease-out-strong) both;
+
+  @keyframes rise { from { opacity: 0; transform: translate3d(0, var(--rise-y, 6px), 0); } }
+  @keyframes pop { from { opacity: 0; transform: scale(var(--pop-scale, 0.85)); } }
+  @keyframes tick { from { opacity: 0; transform: translate3d(0, var(--tick-y, 40%), 0); } }
+  @keyframes stripes { to { background-position: 16px 0; } }
+}
+
+/* Screentone: halftone dots as in printed manga. Pair with a mask to fade out. */
+@utility tone {
+  background-image: radial-gradient(var(--tone) 0.9px, transparent 1.25px);
+  background-size: 5px 5px;
+}
+@utility tone-fade-r { mask-image: linear-gradient(to right, black, transparent 85%); }
+@utility tone-fade-b { mask-image: linear-gradient(to bottom, black, transparent 90%); }
+/* Moving hatch for work in progress. */
+@utility stripes {
+  background-image: linear-gradient(135deg, rgb(255 255 255 / 0.28) 25%, transparent 25% 50%, rgb(255 255 255 / 0.28) 50% 75%, transparent 75%);
+  background-size: 16px 16px;
+  animation: var(--animate-stripes);
+}
+/* Short orchestrated entrance for list children: style={{'--i': index}}. */
+@utility stagger {
+  animation: var(--animate-rise);
+  animation-delay: calc(min(var(--i, 0), 14) * 16ms);
+}
+
+@layer base {
+  * { @apply border-border outline-ring; }
+  html, body, #root { min-height: 100%; }
+  html { -webkit-tap-highlight-color: transparent; }
+  body { @apply bg-background text-foreground font-sans antialiased; margin: 0; text-rendering: optimizeLegibility; }
+  /* Headings break into even lines; paragraphs never leave one character alone on the last line. */
+  h1, h2, h3 { text-wrap: balance; }
+  p { text-wrap: pretty; }
+  a, button, input, label, select, summary, textarea, [role="button"] { touch-action: manipulation; }
+  ::selection { background: var(--seal-soft); color: var(--foreground); }
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
+  [hidden] { display: none !important; }
+}
+
+.kmoe-ui { font: 400 14px/1.5 var(--app-font); color: var(--foreground); pointer-events: auto; -webkit-font-smoothing: antialiased; }
+
+/* Reduced motion: drop movement and loops, keep short opacity fades as feedback. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    --tw-enter-scale: 1 !important; --tw-exit-scale: 1 !important;
+    --tw-enter-translate-x: 0 !important; --tw-enter-translate-y: 0 !important;
+    --tw-exit-translate-x: 0 !important; --tw-exit-translate-y: 0 !important;
+    --tw-enter-rotate: 0 !important; --tw-exit-rotate: 0 !important;
+    --rise-y: 0px !important; --pop-scale: 1 !important; --tick-y: 0px !important;
+    scroll-behavior: auto !important;
+  }
+  .stripes, .animate-stripes { animation: none !important; }
+  [data-slot="indicator"] { transition: none !important; }
+  [data-slot="collapsible-content"] { animation: none !important; }
+}

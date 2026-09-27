@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f3ee" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#15161b" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      // Light or dark before the first paint: the sidebar switch's choice, else the system's (followed as it changes).
+      (function () {
+        var media = matchMedia('(prefers-color-scheme: dark)');
+        function apply() {
+          var saved = null;
+          try { saved = localStorage.getItem('kmoesync.theme'); } catch (e) {}
+          document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : media.matches ? 'dark' : 'light';
+        }
+        apply();
+        media.addEventListener('change', apply);
+      })();
+    </script>
+    <title>Kmoe Sync</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

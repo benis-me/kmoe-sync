@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用说明与常见问题
+    url: https://github.com/benis-me/kmoe-sync#常见问题
+    about: 部署、代理、Kmoe 限流、Komga 元数据等常见问题
+  - name: 安全问题
+    url: https://github.com/benis-me/kmoe-sync/security/advisories/new
+    about: 请私下报告安全漏洞，不要公开提 Issue

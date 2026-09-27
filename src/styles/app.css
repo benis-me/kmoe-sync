@@ -1,0 +1,11 @@
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "./theme.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@source "../";
+
+/* Toasts rise above the comic page's sticky action bar. */
+:root:has([data-bottom-bar]) { --bottom-inset: 92px; }
+.theme-switching, .theme-switching * { transition: none !important; }

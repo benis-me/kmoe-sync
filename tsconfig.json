@@ -1,0 +1,6 @@
+{
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.server.json" }],
+  // Bun (server, tests, `bun build --compile`) resolves import aliases from this root file.
+  "compilerOptions": { "paths": { "@shared/*": ["./shared/*"] } }
+}

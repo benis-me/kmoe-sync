@@ -1,0 +1,50 @@
+name: 问题反馈
+description: 功能不正常、报错或崩溃
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先看 README 的「常见问题」并搜索已有 Issue。
+        **不要**贴出 Kmoe 账号、密码、Cookie、API Key、令牌或内网地址等隐私信息。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 「设置 → 关于」里的版本号
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: 部署方式
+      options:
+        - Docker（GHCR 镜像）
+        - Docker（自己构建）
+        - 群晖 / Portainer
+        - 源码运行
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 期望看到什么，实际发生了什么。可以附上截图。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开……
+        2. 点击……
+        3. 看到……
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: "`docker logs kmoesync` 里相关的几行（去掉隐私信息）"
+      render: text
