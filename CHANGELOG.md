@@ -2,11 +2,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.1.4] - 2026-09-29
 
 ### 变更
 
 - Komga 的阅读方向可以在「设置 → Komga 元数据 → 写入内容」里选：按作品判断（默认，和以前一样：日漫从右到左，其他不改）、Webtoon、从右到左、从左到右、垂直或不修改。改动在各系列下次同步时写入，不会把已同步的系列重新排队；要马上全部改过来，在书库整理点「同步到 Komga」。
+
+### 修复
+
+- 书库整理的「同步到 Komga」：书库里只要有 Bangumi 还没匹配的文件夹，按钮就只同步待同步的那些、永远不会全部重写；现在这些本来就同步不了的文件夹不再算作待同步。
 
 ## [0.1.3] - 2026-09-29
 
@@ -61,6 +65,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.1.4]: https://github.com/benis-me/kmoe-sync/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/benis-me/kmoe-sync/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/benis-me/kmoe-sync/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/benis-me/kmoe-sync/compare/v0.1.0...v0.1.1
