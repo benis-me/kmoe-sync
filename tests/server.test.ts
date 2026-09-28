@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { brotliCompressSync, gzipSync } from 'node:zlib';
 import type { Task } from '@shared/model';
 import { createApp } from '../server/app';
+import { KmoeClient } from '../server/kmoe/client';
 import { FAKE_PASSWORD, startFakeKmoe } from './fake-kmoe';
 import { startFakeDav } from './storage/fake-webdav';
 
@@ -13,10 +14,16 @@ const fake = startFakeKmoe({ port: 0 });
 const dav = startFakeDav({ auth: { username: 'nas', password: 'dav-secret' } });
 const root = mkdtempSync(join(tmpdir(), 'kmoesync-'));
 const library = join(root, 'library');
+/** Bun error codes the next requests to the fake Kmoe fail with, one per request. */
+const drops: string[] = [];
+const flaky = ((input: string | URL | Request, init?: RequestInit) => {
+  const code = String(input instanceof Request ? input.url : input).startsWith(fake.origin) ? drops.shift() : undefined;
+  return code ? Promise.reject(Object.assign(new Error(`connection failed (${code})`), { code })) : fetch(input, init);
+}) as typeof fetch;
 const app = createApp({
   host: '127.0.0.1', port: 0, dataDir: join(root, 'data'), libraryRoot: library, staticDir: join(root, 'web'),
   mirrors: [fake.origin], secureCookies: false, secret: Buffer.alloc(32, 7), fakeKmoe: true,
-}, { fetch, scheduler: false });
+}, { fetch: flaky, scheduler: false });
 let base = '';
 let cookie = '', csrf = '';
 
@@ -139,6 +146,47 @@ describe('kmoe + downloads', () => {
     expect(activity.some((entry: any) => entry.kind === 'new_items' && entry.title.includes('葬送的芙莉蓮'))).toBe(true);
     const shelf = (await api('GET', '/api/shelf')).data;
     expect(shelf[0]).toMatchObject({ comic: { key: 'f7e2c9' }, counts: { downloaded: 4, new: 1 } });
+  });
+
+  test('subscription: a check that cannot reach Kmoe retries within minutes and clears its error once it works', async () => {
+    const delays = KmoeClient.retryDelays;
+    KmoeClient.retryDelays = [1, 1];
+    try {
+      const check = () => api('POST', '/api/comics/f7e2c9/check');
+      const subscription = async () => (await api('GET', '/api/comics/f7e2c9')).data.subscription;
+      const reports = async () => (await api('GET', '/api/activity')).data.filter((entry: any) => entry.kind === 'check_failed');
+      const minutesAway = (at: string) => Math.round((Date.parse(at) - Date.now()) / 60_000);
+      // A connection that drops is sent again at once: the check just works.
+      drops.push('ECONNRESET', 'ECONNRESET');
+      expect((await check()).status).toBe(200);
+      expect(drops).toEqual([]);
+      // Kmoe unreachable: next check in 5, then 10, then 20 minutes; the feed hears of it once, when the first retry fails.
+      drops.push(...Array<string>(3).fill('ConnectionRefused'));
+      const failed = await check();
+      expect(failed).toMatchObject({ status: 502, data: { error: { code: 'kmoe_network', message: `无法连接 ${new URL(fake.origin).host}（连接被拒绝）` } } });
+      expect(await subscription()).toMatchObject({ error: failed.data.error.message });
+      expect(minutesAway((await subscription()).nextCheckAt)).toBe(5);
+      expect(await reports()).toHaveLength(0);
+      await check();
+      expect(minutesAway((await subscription()).nextCheckAt)).toBe(10);
+      expect(await reports()).toMatchObject([{ title: '《葬送的芙莉蓮》检查更新失败', detail: expect.stringContaining('会自动重试') }]);
+      await check();
+      expect(minutesAway((await subscription()).nextCheckAt)).toBe(20);
+      expect(await reports()).toHaveLength(1);
+      // A batch ends at the first check that cannot reach Kmoe: the next subscription is not tried until a later tick.
+      await api('PUT', '/api/comics/c9d0e1/subscription', { enabled: true, types: ['volume'], format: 'epub', targetId, strategy: 'future', line: 0 });
+      drops.push('ConnectionRefused', 'ConnectionRefused');
+      await app.subscriptions.checkDue(true);
+      expect(drops).toHaveLength(1);
+      expect((await api('GET', '/api/comics/c9d0e1')).data.subscription).toMatchObject({ lastCheckAt: null, error: null });
+      drops.length = 0;
+      await api('DELETE', '/api/comics/c9d0e1/subscription?cancelPending=true');
+      // Reachable again: the error is gone and the normal interval (6 h ± 10 %) is back.
+      expect((await check()).status).toBe(200);
+      const recovered = await subscription();
+      expect(recovered.error).toBeNull();
+      expect(minutesAway(recovered.nextCheckAt)).toBeGreaterThan(5 * 60);
+    } finally { drops.length = 0; KmoeClient.retryDelays = delays; }
   });
 
   test('quota exhaustion pauses the queue instead of failing', async () => {

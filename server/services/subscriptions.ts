@@ -15,8 +15,15 @@ import { BULK_PACE_MS } from './library';
 
 type Policy = Pick<SubscriptionInput, 'enabled' | 'types' | 'format' | 'targetId' | 'strategy'> & { createdAt: string };
 
+/** First retry of a check that failed on the network; later ones double it. */
+const RETRY_MS = 5 * 60_000;
+/** Kmoe unreachable, timing out or answering 5xx: not the comic's fault, and usually over within minutes. */
+const networkFailure = (error: unknown) => error instanceof KmoeError && error.code === 'network';
+
 export class SubscriptionService {
   private running: Promise<void> | null = null;
+  /** Network failures in a row per comic id (a restart forgets them: the next failure retries soon again). */
+  private readonly failures = new Map<number, number>();
   checking = false;
   onChange = () => {};
 
@@ -119,6 +126,7 @@ export class SubscriptionService {
       const subscription = this.get(comic.id)!;
       const plan = this.plan(comic.id, { ...subscription, createdAt: subscription.createdAt }, false);
       const result = tasks.enqueue(comic.id, plan.queue, { targetId: subscription.targetId, format: subscription.format, line: subscription.line }, 'subscription');
+      this.failures.delete(comic.id);
       db.run('UPDATE subscriptions SET last_check_at = ?, last_success_at = ?, next_check_at = ?, error = NULL WHERE comic_id = ?', [time, time, this.nextCheck(), comic.id]);
       const relevant = added.filter(item => subscription.types.includes(item.type));
       if (relevant.length) {
@@ -138,8 +146,15 @@ export class SubscriptionService {
         throw error;
       }
       const message = errorMessage(error);
-      db.run('UPDATE subscriptions SET last_check_at = ?, next_check_at = ?, error = ? WHERE comic_id = ?', [time, this.nextCheck(), message, comic.id]);
-      activity.add({ kind: 'check_failed', level: 'warning', comicId: comic.id, title: `《${comic.title}》检查更新失败`, detail: message, merge: () => ({ title: `《${comic.title}》检查更新失败`, detail: message }) });
+      // Retry a network failure after 5, 10, 20… minutes until that reaches the normal interval; the activity feed hears
+      // of it only once the first retry has failed too.
+      const failures = networkFailure(error) ? (this.failures.get(comic.id) ?? 0) + 1 : 0;
+      if (failures) this.failures.set(comic.id, failures); else this.failures.delete(comic.id);
+      const retry = failures ? RETRY_MS * 2 ** (failures - 1) : Infinity;
+      const next = retry < this.deps.settings.get().checkIntervalHours * 3_600_000 ? new Date(Date.now() + retry).toISOString() : this.nextCheck();
+      db.run('UPDATE subscriptions SET last_check_at = ?, next_check_at = ?, error = ? WHERE comic_id = ?', [time, next, message, comic.id]);
+      const detail = failures ? `${message}，会自动重试` : message;
+      if (failures === 0 || failures === 2) activity.add({ kind: 'check_failed', level: 'warning', comicId: comic.id, title: `《${comic.title}》检查更新失败`, detail, merge: () => ({ title: `《${comic.title}》检查更新失败`, detail }) });
       hub.emit({ type: 'comic', key });
       throw error;
     }
@@ -155,10 +170,11 @@ export class SubscriptionService {
     this.onChange();
     this.running = (async () => {
       for (const [index, key] of due.entries()) {
-        // Spaced out like other bulk Kmoe work; a throttled Kmoe ends the batch (the rest stay due).
+        // Spaced out like other bulk Kmoe work. A throttled or unreachable Kmoe ends the batch (the rest stay due), so an
+        // outage costs one failed check per scheduler tick instead of a timeout for every subscription in a row.
         if (index) await Bun.sleep(this.deps.pace ?? BULK_PACE_MS);
         if (kmoeThrottle()) break;
-        await this.check(key).catch(() => {});
+        if (await this.check(key).then(() => false, networkFailure)) break;
       }
     })().finally(() => { this.running = null; this.checking = false; this.onChange(); });
     return this.running;

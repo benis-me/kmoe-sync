@@ -2,6 +2,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 修复
+
+- 检查更新偶尔报「无法连接 kzo.moe（The socket connection was closed unexpectedly…）」后要等几个小时才重试：连接中途断开的请求会自动重发；仍连不上 Kmoe 或 Kmoe 返回 5xx 时，5 分钟后重试，之后间隔逐次加倍直到正常检查间隔，成功后错误自动消失。最近动态只在第一次重试也失败时记一条；连接错误显示为中文原因（如「连接被重置」）。
+
 ## [0.1.1] - 2026-09-28
 
 ### 修复

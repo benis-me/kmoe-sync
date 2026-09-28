@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { createServer, type AddressInfo } from 'node:net';
 import { KmoeClient, kmoeThrottle, persistKmoeThrottle, resetKmoeThrottle, type ThrottleState } from '../server/kmoe/client';
 import { KmoeError } from '../server/kmoe/errors';
 import { javascriptCalls, keyFromUrl, parseAccount, parseDetailPage, parseDownloadLink, parseSearchPage, parseVolumeData } from '../server/kmoe/parser';
@@ -141,5 +142,40 @@ describe('site operations against the fake mirror', () => {
     fake.control.expired = true;
     expect(await code(s.account())).toBe('login_required');
     fake.control.expired = false;
+  });
+});
+
+describe('dropped connections', () => {
+  // Closes the first `drop` connections as soon as a request arrives (what Bun reports as "The socket connection was
+  // closed unexpectedly"), answers the rest.
+  const state = { drop: 0, connections: 0 };
+  const server = createServer(socket => {
+    state.connections++;
+    socket.on('error', () => {});
+    socket.once('data', () => {
+      if (state.drop > 0) { state.drop--; socket.destroy(); return; }
+      socket.end('HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok');
+    });
+  });
+  const delays = KmoeClient.retryDelays;
+  let origin = '';
+  beforeAll(async () => {
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    KmoeClient.retryDelays = [1, 1];
+  });
+  afterAll(() => { server.close(); KmoeClient.retryDelays = delays; });
+
+  it('sends a GET again when its connection broke off, but never the login POST', async () => {
+    const client = new KmoeClient({ origin, interval: 0 });
+    Object.assign(state, { drop: 2, connections: 0 });
+    expect((await client.get('/')).text).toBe('ok');
+    expect(state.connections).toBe(3);
+    Object.assign(state, { drop: 3, connections: 0 });
+    expect(await client.get('/').catch((error: unknown) => error)).toMatchObject({ code: 'network', message: `无法连接 ${new URL(origin).host}（连接被重置）` });
+    expect(state.connections).toBe(3);
+    Object.assign(state, { drop: 1, connections: 0 });
+    expect(await code(client.post('/login_act.php', { form: { email: 'reader@example.com', passwd: 'secret' } }))).toBe('network');
+    expect(state.connections).toBe(1);
   });
 });

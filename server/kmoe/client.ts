@@ -1,5 +1,6 @@
 // HTTP client for one Kmoe mirror: cookie jar, polite rate limiting, manual redirects (to see login redirects and
 // every Set-Cookie) and the same request headers the site's own web client sends.
+import { connectionProblem } from '../metadata/bangumi';
 import { KmoeError, offline } from './errors';
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
@@ -77,7 +78,12 @@ async function politely(interval: number) {
   await turn;
 }
 
+/** Bun's codes for a connection that was open and then broke off. Refused connections and failed lookups are not retried. */
+const DROPPED = new Set(['ECONNRESET', 'ConnectionClosed', 'EPIPE']);
+
 export class KmoeClient {
+  /** Pauses before the 2nd and 3rd attempt of a GET whose connection dropped (tests shorten them). */
+  static retryDelays = [1_000, 3_000];
   readonly origin: string;
   private readonly cookies = new Map<string, string>();
   private readonly interval: number;
@@ -109,7 +115,6 @@ export class KmoeClient {
         if (DEFLECTION.test(url.hostname)) throw deflected(url.host);
         throw new KmoeError('site_changed', `Kmoe 跳转到了其他站点（${url.host}）`);
       }
-      if (kmoeThrottle()) throw throttled();
       const headers: Record<string, string> = {
         'User-Agent': USER_AGENT,
         Accept: options.accept === 'json' ? 'application/json, text/plain, */*' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -119,16 +124,7 @@ export class KmoeClient {
       if (options.xhrFrom) headers['X-KM-FROM'] = `${API_VERSION}(WEB) ${method} ${options.xhrFrom}`;
       const cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; ');
       if (cookie) headers.Cookie = cookie;
-      await politely(this.interval);
-      let response: Response;
-      try {
-        const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(this.timeout)]) : AbortSignal.timeout(this.timeout);
-        response = await this.fetchImpl(url, { method, headers, body, redirect: 'manual', signal });
-      } catch (error) {
-        if (options.signal?.aborted) throw error;
-        const timedOut = error instanceof DOMException && error.name === 'TimeoutError';
-        throw offline(timedOut ? `连接 ${this.host} 超时` : `无法连接 ${this.host}（${error instanceof Error ? error.message : String(error)}）`);
-      }
+      const { response, text } = await this.send(url, { method, headers, body, redirect: 'manual' }, options.signal);
       this.store(response.headers);
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
@@ -137,7 +133,6 @@ export class KmoeClient {
         if (response.status !== 307 && response.status !== 308) { method = 'GET'; body = undefined; }
         continue;
       }
-      const text = await response.text();
       if (response.status === 429) throw new KmoeError('rate_limited', 'Kmoe 请求过于频繁，稍后自动重试');
       if (response.status >= 500) throw new KmoeError('network', `Kmoe 服务暂时不可用（HTTP ${response.status}）`);
       if (response.status === 404) throw new KmoeError('not_found', '在 Kmoe 上找不到该页面');
@@ -148,6 +143,28 @@ export class KmoeClient {
 
   get(path: string, options?: KmoeRequest) { return this.request('GET', path, options); }
   post(path: string, options?: KmoeRequest) { return this.request('POST', path, options); }
+
+  /**
+   * One request, body included. A GET whose connection broke off ("The socket connection was closed unexpectedly": a
+   * stale keep-alive socket, a proxy or NAT dropping it) is sent again; a POST (the login) never is.
+   */
+  private async send(url: URL, init: RequestInit, outer?: AbortSignal): Promise<{ response: Response; text: string }> {
+    for (let attempt = 0; ; attempt++) {
+      if (kmoeThrottle()) throw throttled();
+      await politely(this.interval);
+      try {
+        const signal = outer ? AbortSignal.any([outer, AbortSignal.timeout(this.timeout)]) : AbortSignal.timeout(this.timeout);
+        const response = await this.fetchImpl(url, { ...init, signal });
+        return { response, text: await response.text() };
+      } catch (error) {
+        if (outer?.aborted) throw error;
+        const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+        if (init.method === 'GET' && attempt < KmoeClient.retryDelays.length && DROPPED.has(code)) { await Bun.sleep(KmoeClient.retryDelays[attempt]!); continue; }
+        const timedOut = error instanceof DOMException && error.name === 'TimeoutError';
+        throw offline(timedOut ? `连接 ${this.host} 超时` : `无法连接 ${this.host}（${connectionProblem(error)}）`);
+      }
+    }
+  }
 
   private store(headers: Headers) {
     for (const line of headers.getSetCookie()) {
