@@ -2,8 +2,10 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import { version } from '../package.json';
 
-export const VERSION = '0.1.0';
+/** package.json is the one place a release changes the version. */
+export const VERSION = version;
 
 /** Official Kmoe mirrors, most reliable first. The user picks the preferred one in settings. */
 export const DEFAULT_MIRRORS = ['kzo.moe', 'mox.moe', 'kxo.moe', 'kxx.moe', 'koz.moe', 'kzz.moe'] as const;

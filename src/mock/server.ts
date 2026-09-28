@@ -12,6 +12,7 @@ import {
 import { DEFAULT_RULE, NamingError, joinPath, normalizePath, renderRule, validateRule } from '@shared/naming';
 import { tally } from '@/features/library/state';
 import { formatMB } from '@/lib/format';
+import { version } from '../../package.json';
 import { coverFor, hash } from './covers';
 import {
   BANGUMI, KOMGA_LIBRARIES, LIBRARY_ROOT, MIRRORS, filePath, latestDump, latestLabel, libraryKey, seed, unknownComic,
@@ -201,7 +202,7 @@ export function createMockServer(scenario: Scenario) {
   const queueState = (): QueueState => ({ ...db.queue, counts: counts(), speed: db.tasks.reduce((sum, t) => sum + (t.status === 'running' ? t.speed : 0), 0) });
   function status(): Status {
     const next = [...db.subscriptions.values()].filter(s => s.enabled && s.nextCheckAt).map(s => s.nextCheckAt!).sort()[0] ?? null;
-    return { version: '0.1.0', kmoe: db.kmoe, queue: queueState(), nextCheckAt: next, checking: db.checking, libraryRoot: LIBRARY_ROOT, targets: db.targets.length };
+    return { version, kmoe: db.kmoe, queue: queueState(), nextCheckAt: next, checking: db.checking, libraryRoot: LIBRARY_ROOT, targets: db.targets.length };
   }
 
   // ---------- downloads ----------
@@ -1029,7 +1030,7 @@ export function createMockServer(scenario: Scenario) {
 
     'GET /api/settings': () => settings(),
     'GET /api/about': () => ({
-      version: '0.1.0', startedAt, paths: { data: '/data', library: LIBRARY_ROOT },
+      version, startedAt, paths: { data: '/data', library: LIBRARY_ROOT },
       runtime: { bun: '1.3.14', platform: 'linux', arch: 'x64', timezone: 'Asia/Shanghai' }, user: { uid: 1026, gid: 100 }, databaseBytes: 3_276_800,
       counts: { comics: db.comics.size, subscriptions: db.subscriptions.size, folders: db.folders.length, tasks: db.tasks.length },
     }),

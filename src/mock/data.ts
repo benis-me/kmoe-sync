@@ -4,6 +4,7 @@ import type {
   MetadataOptions, MetadataText, PauseReason, Settings, Source, SourceItem, Subscription, Target, Task,
 } from '@shared/model';
 import { DEFAULT_RULE, joinPath, renderRule } from '@shared/naming';
+import { version } from '../../package.json';
 import { coverFor, hash } from './covers';
 
 export type Scenario = 'setup' | 'fresh' | 'full' | 'paused' | 'expired' | 'network';
@@ -279,7 +280,7 @@ function emptyDb(): MockDb {
     tasks: [],
     library: new Map(),
     extras: new Map([['local', ['/_待整理/', '/Magazines/', ...LEGACY_FILES]]]),
-    activity: [{ id: 1, kind: 'info', level: 'info', title: 'Kmoe Sync 已启动', detail: '版本 0.1.0', comicKey: null, createdAt: ago(3) }],
+    activity: [{ id: 1, kind: 'info', level: 'info', title: 'Kmoe Sync 已启动', detail: `版本 ${version}`, comicKey: null, createdAt: ago(3) }],
     sources: [],
     sourceItems: [],
     folders: [],
@@ -457,7 +458,7 @@ function seedLibrary(db: MockDb, scenario: Exclude<Scenario, 'setup' | 'fresh'>)
   const event = (kind: Activity['kind'], level: Activity['level'], title: string, detail: string | null, comicKey: string | null, minutes: number): Activity =>
     ({ id: activityId++, kind, level, title, detail, comicKey, createdAt: ago(minutes) });
   db.activity = [
-    event('info', 'info', 'Kmoe Sync 已启动', '版本 0.1.0', null, 60 * 24 * 7),
+    event('info', 'info', 'Kmoe Sync 已启动', `版本 ${version}`, null, 60 * 24 * 7),
     event('download_done', 'success', '下载完成 · 迷宮飯', '14 卷与番外 01 · 本地书库', '15521', 60 * 24 * 6),
     event('queue_paused', 'warning', '额度不足，队列已暂停', '剩余 380 MB，低于保留的 500 MB', null, 60 * 24 * 4),
     event('queue_resumed', 'info', '下载队列已恢复', '额度已于 1 日重置', null, 60 * 24 * 3),
