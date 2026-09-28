@@ -220,6 +220,8 @@ export const MetadataOptions = z.object({
   autoSync: z.boolean(),
   /** Max Bangumi tags written to Komga. */
   tagLimit: z.number().int().min(0).max(30),
+  /** Komga's reading direction for every series; auto: right to left for Japanese manga, the rest untouched; keep: never written. */
+  readingDirection: z.enum(['WEBTOON', 'RIGHT_TO_LEFT', 'LEFT_TO_RIGHT', 'VERTICAL', 'auto', 'keep']),
 });
 export type MetadataOptions = z.infer<typeof MetadataOptions>;
 /** Offline copy of Bangumi's book data (weekly Bangumi Archive dump from GitHub), for networks where bgm.tv is blocked. */

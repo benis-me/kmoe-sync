@@ -106,7 +106,7 @@ describe('settings', () => {
         hasToken: false, source: 'auto', online: { reachable: null, checkedAt: null, error: null },
         archive: { state: 'none', dump: null, dumpDate: null, importedAt: null, subjects: 0, progress: null, error: null, checkedAt: null },
       },
-      options: { titleLanguage: 'cn', books: true, posters: 'off', lock: true, autoSync: true, tagLimit: 10 },
+      options: { titleLanguage: 'cn', books: true, posters: 'off', lock: true, autoSync: true, tagLimit: 10, readingDirection: 'auto' },
     });
     const saved = metadata.patchSettings({
       enabled: true, komga: { url: '192.168.1.10:25600/', secret: 'key-123', libraries: [{ targetId, libraryId: 'lib1' }] },
@@ -236,6 +236,20 @@ describe('writing to Komga', () => {
     await s.metadata.syncFolder(folderId);
     expect(komga.state.patches.length).toBe(written);
     expect(s.state(folderId).komga).toMatchObject({ state: 'synced', dirty: false });
+  });
+
+  test('the reading direction is a setting: a change is written at each series\' next sync, synced series are not queued again', async () => {
+    const s = setup();
+    s.configure();
+    const folderId = grandBlue(s);
+    await s.metadata.matchFolder(folderId, { auto: true });
+    await s.metadata.syncFolder(folderId);
+    const direction = () => komga.state.patches.filter(patch => patch.kind === 'series').at(-1)?.body.readingDirection;
+    expect(direction()).toBe('RIGHT_TO_LEFT');
+    s.metadata.patchSettings({ options: { readingDirection: 'WEBTOON' } });
+    expect(s.state(folderId).komga).toMatchObject({ state: 'synced', dirty: false });
+    await s.metadata.syncFolder(folderId);
+    expect(direction()).toBe('WEBTOON');
   });
 
   test('posters: the Bangumi cover is uploaded once and never over a user-uploaded one', async () => {

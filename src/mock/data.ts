@@ -196,7 +196,7 @@ export const BANGUMI: BangumiEntry[] = [
 
 /** Libraries of the demo Komga server. */
 export const KOMGA_LIBRARIES: KomgaLibrary[] = [{ id: '0KMG1', name: '漫画', root: '/comic' }, { id: '0KMG2', name: 'Kindle', root: '/comic/Kindle' }];
-const METADATA_OPTIONS: MetadataOptions = { titleLanguage: 'cn', books: true, posters: 'series', lock: true, autoSync: true, tagLimit: 10 };
+const METADATA_OPTIONS: MetadataOptions = { titleLanguage: 'cn', books: true, posters: 'series', lock: true, autoSync: true, tagLimit: 10, readingDirection: 'auto' };
 
 /** The newest Bangumi Archive dump (weekly; the demo's is five days old): its file name and export time. */
 export function latestDump() {

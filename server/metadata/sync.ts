@@ -85,8 +85,10 @@ export function seriesPatch({ subject, persons, related, comic, kmoeUrl, current
   const language = languageOf(comic);
   const publisher = ((language === 'zh-Hant' ? traditionalEdition(subject)?.['出版社'] : undefined) ?? infobox(subject, '出版社')[0])?.split(/[、,，/]/)[0]?.trim();
   if (publisher) body.publisher = publisher;
-  const meta = subject.meta_tags ?? [];
-  if (subject.platform === '漫画' && !meta.some(tag => ['中国', '韩国', '美国', '欧美'].includes(tag))) body.readingDirection = 'RIGHT_TO_LEFT';
+  // auto: Japanese manga (a 漫画 not tagged Chinese, Korean or Western) reads right to left; anything else keeps Komga's.
+  const japanese = subject.platform === '漫画' && !(subject.meta_tags ?? []).some(tag => ['中国', '韩国', '美国', '欧美'].includes(tag));
+  const direction = options.readingDirection === 'auto' ? (japanese ? 'RIGHT_TO_LEFT' : null) : options.readingDirection === 'keep' ? null : options.readingDirection;
+  if (direction) body.readingDirection = direction;
   if (subject.nsfw) body.ageRating = 18;
   if (language) body.language = language;
   if (text.genres.length) body.genres = text.genres;

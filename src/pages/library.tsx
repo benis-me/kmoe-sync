@@ -121,7 +121,8 @@ function LibraryView({ target, targets, filters, onFilters }: { target: Target; 
       // Nothing new to look at: look again at what was not found.
       if (kind === 'kmoe') return request('POST /api/library/match-kmoe', { body: { targetId, retry: counts.kmoe.pending === 0 } });
       if (kind === 'bangumi') return request('POST /api/library/match-bangumi', { body: { targetId, retry: counts.bangumi.none === 0 } });
-      const stale = overview!.folders.some(f => f.metadata.komga.state === 'pending' || f.metadata.komga.state === 'error' || f.metadata.komga.dirty);
+      // Folders still to write (not those waiting for a Bangumi match, which cannot be): those first, else all of them again.
+      const stale = overview!.folders.some(f => { const komga = statusOf(f, 'komga'); return komga === 'pending' || komga === 'error' || (komga === 'not_found' && f.metadata.komga.dirty); });
       return request('POST /api/library/sync-komga', { body: { targetId, all: !stale } });
     },
     onMutate: kind => { if (kind.startsWith('ai-')) setAiKind(kind); },

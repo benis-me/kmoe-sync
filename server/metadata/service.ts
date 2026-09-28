@@ -55,7 +55,7 @@ const DEFAULTS: Stored = {
   enabled: false,
   komga: { url: '', auth: 'apiKey', username: '', libraries: [] },
   bangumi: { source: 'auto' },
-  options: { titleLanguage: 'cn', books: true, posters: 'off', lock: true, autoSync: true, tagLimit: 10 },
+  options: { titleLanguage: 'cn', books: true, posters: 'off', lock: true, autoSync: true, tagLimit: 10, readingDirection: 'auto' },
 };
 type OnlineState = MetadataSettings['bangumi']['online'];
 /** How long a reachability probe counts: a working API is re-checked hourly, a blocked one every 15 minutes. */

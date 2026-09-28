@@ -186,6 +186,16 @@ function TagLimit({ value, onSave }: { value: number; onSave: (limit: number) =>
   </InputGroup>;
 }
 
+/** Komga's reading directions (its own names), and what each means here. */
+const DIRECTIONS: [MetadataOptions['readingDirection'], string, string][] = [
+  ['auto', '按作品判断', '日漫从右到左，其他作品保留 Komga 里的设置。'],
+  ['WEBTOON', 'Webtoon', '竖向连续滚动，适合条漫和在手机上读。'],
+  ['RIGHT_TO_LEFT', '从右到左', '日漫的翻页方向。'],
+  ['LEFT_TO_RIGHT', '从左到右', '国漫、欧美漫画常见的翻页方向。'],
+  ['VERTICAL', '垂直', '竖向一页一页地翻。'],
+  ['keep', '不修改', '不写入，保留 Komga 里的设置。'],
+];
+
 function OptionsCard({ options, bangumi }: { options: MetadataOptions; bangumi: MetadataSettings['bangumi'] }) {
   // Offline data has no cover images: covers are only replaced when the online API answers.
   const noCovers = bangumi.source === 'archive' || (bangumi.source === 'auto' && bangumi.online.reachable === false);
@@ -204,6 +214,15 @@ function OptionsCard({ options, bangumi }: { options: MetadataOptions; bangumi: 
         <ToggleGroupItem value="cn" className="px-3.5">中文名</ToggleGroupItem>
         <ToggleGroupItem value="original" className="px-3.5">原名</ToggleGroupItem>
       </ToggleGroup>
+    </SettingRow>
+    <SettingRow label="阅读方向" htmlFor="meta-direction"
+      description={`Komga 阅读器打开系列时的翻页方式：${DIRECTIONS.find(([value]) => value === options.readingDirection)?.[2] ?? ''}改动在各系列下次同步时写入（例如下载了新卷）；要让已同步的也马上改，在书库整理点「同步到 Komga」。`}>
+      <Select value={options.readingDirection} onValueChange={value => save({ readingDirection: value as MetadataOptions['readingDirection'] })}>
+        <SelectTrigger id="meta-direction" className="w-full sm:w-40"><SelectValue /></SelectTrigger>
+        <SelectContent position="popper" align="end">
+          <SelectGroup>{DIRECTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup>
+        </SelectContent>
+      </Select>
     </SettingRow>
     <SettingRow label="写入单册信息" htmlFor="meta-books" description="每一卷的卷号、发售日期、ISBN 和作者。">
       <Switch id="meta-books" checked={options.books} onCheckedChange={books => save({ books })} />

@@ -12,7 +12,7 @@ const grandBlue = fx['subject:118165'] as BgmSubject;
 const volumeOne = fx['subject:118167'] as BgmSubject;
 const persons = fx['persons:118165'] as BgmPerson[];
 const related = fx['related:118165'] as BgmRelated[];
-const OPTIONS: MetadataOptions = { titleLanguage: 'cn', books: true, posters: 'off', lock: true, autoSync: true, tagLimit: 10 };
+const OPTIONS: MetadataOptions = { titleLanguage: 'cn', books: true, posters: 'off', lock: true, autoSync: true, tagLimit: 10, readingDirection: 'auto' };
 
 describe('text folding and similarity', () => {
   test('Traditional and Japanese forms fold to the same key', () => {
@@ -156,6 +156,14 @@ describe('series PATCH body', () => {
     });
     expect(body.summary).toStartWith('以上大学为契机');
     for (const key of Object.keys(body).filter(key => !key.endsWith('Lock'))) expect(body[`${key}Lock`]).toBe(true);
+  });
+  test('reading direction: one for every series, auto (right to left for Japanese manga only), or left alone', () => {
+    const direction = (readingDirection: MetadataOptions['readingDirection'], subject = grandBlue) =>
+      seriesPatch({ subject, persons, related, comic, kmoeUrl: null, current: {}, options: { ...OPTIONS, readingDirection } }).readingDirection;
+    expect(direction('WEBTOON')).toBe('WEBTOON');
+    expect(direction('auto')).toBe('RIGHT_TO_LEFT');
+    expect(direction('auto', { ...grandBlue, meta_tags: ['韩国'] })).toBeUndefined();
+    expect(direction('keep')).toBeUndefined();
   });
   test('tags skip genres, years, platform words, the title and people', () => {
     const tags = body.tags as string[];
