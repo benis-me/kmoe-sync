@@ -1,8 +1,12 @@
 import { Check, CircleAlert, Info, LoaderCircle, TriangleAlert, X } from 'lucide-react';
-import { Toaster as Sonner } from 'sonner';
+import { Toaster as Sonner, toast } from 'sonner';
 import { useMediaQuery } from '@/lib/hooks';
 
 const icon = 'grid size-5 place-items-center rounded-full [&>svg]:size-3.5';
+
+// Errors stay until closed: a failure should not be gone before it is read. Sonner has no per-type duration.
+const error = toast.error;
+toast.error = (message, data) => error(message, { duration: Infinity, ...data });
 
 /** Sonner, dressed as the extension's toasts. Phones: from the top, clear of the tab and action bars. */
 export function Toaster() {
@@ -12,6 +16,7 @@ export function Toaster() {
     offset={{ bottom: 'calc(var(--bottom-inset, 0px) + 20px)', right: 20 }}
     mobileOffset={{ top: 'calc(env(safe-area-inset-top) + 60px)', left: 12, right: 12 }}
     visibleToasts={3}
+    duration={6000}
     gap={8}
     containerAriaLabel="通知"
     icons={{

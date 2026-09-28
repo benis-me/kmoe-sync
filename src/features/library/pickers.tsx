@@ -28,11 +28,13 @@ export function useClosable(onClose: () => void) {
 export type ReturnFocus = { returnFocus?: () => HTMLElement | null | undefined };
 export const refocus = (returnFocus: ReturnFocus['returnFocus']) => (e: Event) => { const el = returnFocus?.(); if (el) { e.preventDefault(); el.focus(); } };
 
-function Option({ checked, cover, title, meta, score, badge, onPick, onChoose }: {
-  checked: boolean; cover: string | null; title: string; meta: string; score?: number; badge?: string; onPick: () => void; onChoose: () => void;
+/** One choice in a list: a native radio (`name` groups a list), so the list is one Tab stop and arrow keys move the choice. Double-click uses it at once. */
+export function Option({ name, checked, cover, title, meta, score, badge, onPick, onChoose }: {
+  name: string; checked: boolean; cover: string | null; title: string; meta: string; score?: number; badge?: string; onPick: () => void; onChoose: () => void;
 }) {
-  return <button type="button" role="radio" aria-checked={checked} onClick={onPick} onDoubleClick={onChoose}
-    className="flex w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-checked:bg-seal-soft/70 aria-checked:ring-1 aria-checked:ring-seal/30">
+  return <label onDoubleClick={onChoose}
+    className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors duration-150 hover:bg-accent has-checked:bg-seal-soft/70 has-checked:ring-1 has-checked:ring-seal/30 has-focus-visible:ring-2 has-focus-visible:ring-ring">
+    <input type="radio" name={name} checked={checked} onChange={onPick} className="sr-only" />
     <Cover src={cover} title={title} className="w-9 rounded-md" />
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
       <span className="flex min-w-0 items-center gap-1.5">
@@ -45,7 +47,7 @@ function Option({ checked, cover, title, meta, score, badge, onPick, onChoose }:
     <span aria-hidden className={cn('grid size-4 shrink-0 place-items-center rounded-full border border-muted-foreground/60', checked && 'border-seal bg-seal')}>
       {checked && <span className="size-1.5 rounded-full bg-seal-foreground" />}
     </span>
-  </button>;
+  </label>;
 }
 
 const GroupLabel = ({ children }: { children: ReactNode }) => <p className="px-2 pt-2 pb-1 text-[11px] font-medium text-muted-foreground first:pt-1">{children}</p>;
@@ -116,7 +118,7 @@ export function LinkKmoeDialog({ folder, onClose, returnFocus }: { folder: Libra
       <div role="radiogroup" aria-label="Kmoe 漫画" aria-busy={results.isFetching} className="min-h-40 flex-1 overflow-y-auto overscroll-contain rounded-xl bg-card p-1 ring-1 ring-border">
         {candidates.length > 0 && <>
           <GroupLabel>建议</GroupLabel>
-          {candidates.map(c => <Option key={c.key} checked={picked === c.key} cover={c.cover} title={c.title} score={c.score} badge={kmoe.ai?.pick === c.key ? 'AI 推荐' : undefined}
+          {candidates.map(c => <Option name={`kmoe-${folder.id}`} key={c.key} checked={picked === c.key} cover={c.cover} title={c.title} score={c.score} badge={kmoe.ai?.pick === c.key ? 'AI 推荐' : undefined}
             meta={[c.authors.join(' / '), c.latest && `最新 ${c.latest}`].filter(Boolean).join(' · ')} onPick={() => setPicked(c.key)} onChoose={() => choose(c.key)} />)}
         </>}
         {query && <GroupLabel>「{query}」的搜索结果</GroupLabel>}
@@ -129,7 +131,7 @@ export function LinkKmoeDialog({ folder, onClose, returnFocus }: { folder: Libra
             : <ErrorState error={results.error} onRetry={() => void results.refetch()} className="min-h-40 p-4" />
           : !results.data ? <ListSkeleton label="正在搜索…" />
           : !found.length ? <p className="px-2 py-6 text-center text-xs text-muted-foreground">{results.data.results.length ? '搜索结果都在上面的建议里。' : '没有找到，换个写法试试：简体、繁体或作者名。'}</p>
-          : found.map(comic => <Option key={comic.key} checked={picked === comic.key} cover={comic.cover} title={comic.title} badge={comic.tracked ? '已在书架' : undefined}
+          : found.map(comic => <Option name={`kmoe-${folder.id}`} key={comic.key} checked={picked === comic.key} cover={comic.cover} title={comic.title} badge={comic.tracked ? '已在书架' : undefined}
             meta={[comic.authors.join(' / '), comic.latest && `最新 ${comic.latest}`].filter(Boolean).join(' · ')} onPick={() => setPicked(comic.key)} onChoose={() => choose(comic.key)} />)}
       </div>
       <PasteBox id={`kmoe-link-${folder.id}`} label="或粘贴 Kmoe 漫画链接" placeholder="https://kxo.moe/c/12345.htm" busy={link.isPending}
@@ -216,11 +218,11 @@ export function BangumiDialog({ folderId, label, query: initial, bangumi, onClos
       <div role="radiogroup" aria-label="Bangumi 条目" aria-busy={results.isFetching} className="min-h-40 flex-1 overflow-y-auto overscroll-contain rounded-xl bg-card p-1 ring-1 ring-border">
         {current && !bangumi.candidates.some(c => c.id === current.id) && <>
           <GroupLabel>当前</GroupLabel>
-          <Option checked={picked === current.id} cover={current.cover} title={current.nameCn || current.name} meta={subjectMeta(current)} onPick={() => setPicked(current.id)} onChoose={() => choose(current.id)} />
+          <Option name={`bangumi-${folderId}`} checked={picked === current.id} cover={current.cover} title={current.nameCn || current.name} meta={subjectMeta(current)} onPick={() => setPicked(current.id)} onChoose={() => choose(current.id)} />
         </>}
         {bangumi.candidates.length > 0 && <>
           <GroupLabel>候选</GroupLabel>
-          {bangumi.candidates.map(c => <Option key={c.id} checked={picked === c.id} cover={c.cover} title={c.nameCn || c.name} meta={subjectMeta(c)} score={c.score}
+          {bangumi.candidates.map(c => <Option name={`bangumi-${folderId}`} key={c.id} checked={picked === c.id} cover={c.cover} title={c.nameCn || c.name} meta={subjectMeta(c)} score={c.score}
             badge={aiPick === c.id ? 'AI 推荐' : c.series ? undefined : '单册'} onPick={() => setPicked(c.id)} onChoose={() => choose(c.id)} />)}
         </>}
         {query && <GroupLabel>「{query}」的搜索结果</GroupLabel>}
@@ -228,7 +230,7 @@ export function BangumiDialog({ folderId, label, query: initial, bangumi, onClos
           : results.error ? <ErrorState error={results.error} onRetry={() => void results.refetch()} className="min-h-40 p-4" />
           : !results.data ? <ListSkeleton label="正在搜索 Bangumi…" />
           : !found.length ? <p className="px-2 py-6 text-center text-xs text-muted-foreground">{results.data.length ? '搜索结果都在上面。' : '没有找到，试试原名或只搜关键字。'}</p>
-          : found.map(s => <Option key={s.id} checked={picked === s.id} cover={s.cover} title={s.nameCn || s.name} meta={subjectMeta(s)} badge={s.series ? undefined : '单册'}
+          : found.map(s => <Option name={`bangumi-${folderId}`} key={s.id} checked={picked === s.id} cover={s.cover} title={s.nameCn || s.name} meta={subjectMeta(s)} badge={s.series ? undefined : '单册'}
             onPick={() => setPicked(s.id)} onChoose={() => choose(s.id)} />)}
       </div>
       <PasteBox id={`bangumi-link-${folderId}`} label="或粘贴 bgm.tv 链接 / 条目 ID" placeholder="https://bgm.tv/subject/12345" busy={act.isPending}

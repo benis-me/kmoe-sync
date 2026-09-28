@@ -29,7 +29,8 @@ export const ComicCard = memo(function ComicCard({ entry, index }: { entry: Shel
         <span className="truncate text-sm leading-5 font-medium">{comic.title}</span>
         <span className="truncate text-xs text-muted-foreground">{comic.authors.join(' / ') || '作者未知'}</span>
       </div>
-      <div className="flex items-center gap-2" aria-label={`已下载 ${counts.downloaded} 项，共 ${counts.items} 项`}>
+      <div className="flex items-center gap-2">
+        <span className="sr-only">已下载 {counts.downloaded} 项，共 {counts.items} 项</span>
         <span aria-hidden className="h-1 flex-1 overflow-hidden rounded-full bg-foreground/8">
           <span className={cn('block h-full rounded-full', complete ? 'bg-success' : 'bg-foreground/55')} style={{ width: `${percent(counts.downloaded, counts.items)}%` }} />
         </span>

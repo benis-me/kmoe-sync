@@ -140,8 +140,8 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
         {!target && <Field className="gap-2">
           <span className="text-sm leading-snug font-medium" aria-hidden>类型</span>
           <ToggleGroup type="single" variant="segmented" aria-label="类型" value={draft.kind} onValueChange={value => value && update('kind', value as TargetKind)}>
-            <ToggleGroupItem value="local" className="px-3.5">本地目录</ToggleGroupItem>
-            <ToggleGroupItem value="webdav" className="px-3.5">WebDAV</ToggleGroupItem>
+            <ToggleGroupItem value="local" className="flex-1 px-3.5">本地目录</ToggleGroupItem>
+            <ToggleGroupItem value="webdav" className="flex-1 px-3.5">WebDAV</ToggleGroupItem>
           </ToggleGroup>
         </Field>}
       </div>

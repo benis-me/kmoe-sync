@@ -57,7 +57,8 @@ export function ActionBar({ count, sizeMB, remainingMB, reserveMB, reason, busy,
               <Button variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label="清除选择" onClick={onClear}><X /></Button>
             </> : <span className="text-muted-foreground">未选择章节</span>}
           </div>
-          {remainingMB !== null && <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
+          {/* Phones have no room for the reason beside the button: with chapters picked and no quota line (Kmoe not logged in), it goes here. */}
+          {remainingMB !== null ? <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
             <div aria-hidden className="h-1 w-24 shrink-0 overflow-hidden rounded-full bg-foreground/8">
               <div className={cn('h-full origin-left transition-[transform,background-color] duration-300 ease-out-strong', exceeds ? 'bg-destructive' : belowReserve ? 'bg-warning' : 'bg-seal')}
                 style={{ transform: `scaleX(${remainingMB > 0 ? Math.min(1, sizeMB / remainingMB) : 1})` }} />
@@ -66,7 +67,7 @@ export function ActionBar({ count, sizeMB, remainingMB, reserveMB, reason, busy,
               ? <span className="truncate font-medium text-destructive">超出额度 {formatMB(sizeMB - remainingMB)}</span>
               : belowReserve ? <span className="truncate text-warning">下载后低于保留额度，队列会暂停</span>
               : <span className="truncate">剩余额度 {formatMB(remainingMB - sizeMB)}</span>}
-          </div>}
+          </div> : count > 0 && reason && !busy && <span aria-hidden className="truncate text-xs text-muted-foreground sm:hidden">{reason}</span>}
         </div>
         {reason && !busy && <span id="start-reason" className="max-w-40 text-right text-xs text-muted-foreground max-sm:hidden">{reason}</span>}
         {/* aria-disabled, not disabled: it stays focusable (with its reason) and keeps focus while adding. */}

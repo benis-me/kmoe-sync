@@ -2,6 +2,7 @@
 // context. This tab keeps the conversation. Answers render as Markdown with the tools they used in the order they ran;
 // actions that change something come back as a card to confirm or cancel.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, Check, CircleSlash, LoaderCircle, RotateCcw, SquarePen, Sparkles, Square, TriangleAlert, X } from 'lucide-react';
@@ -97,6 +98,8 @@ function Panel({ onClose }: { onClose: () => void }) {
   const [pending, setPending] = useState<Pending | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  // What opened the panel (a 「问 AI」 button, or the floating button), to put focus back on when it closes.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
   const abort = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -174,10 +177,15 @@ function Panel({ onClose }: { onClose: () => void }) {
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight;
   }, [conversation, live, pending, error]);
 
-  // Closing stops the answer (not an unmount cleanup: StrictMode's trial unmount would cut the first question off).
-  const close = () => { abort.current?.abort(); onClose(); };
-  // On a phone the panel covers the page a link opens.
-  const followLink = () => { if (window.matchMedia('(max-width: 767px)').matches) close(); };
+  // Closing stops the answer (not an unmount cleanup: StrictMode's trial unmount would cut the first question off), and
+  // focus goes back to what opened the panel, or to the floating button that comes back in its place.
+  const close = (refocus = true) => {
+    abort.current?.abort();
+    flushSync(onClose);
+    if (refocus) (opener?.isConnected && opener !== document.body ? opener : document.querySelector<HTMLElement>('[data-assistant-button]'))?.focus();
+  };
+  // On a phone the panel covers the page a link opens (which then takes focus itself).
+  const followLink = () => { if (window.matchMedia('(max-width: 767px)').matches) close(false); };
   function submit(e?: FormEvent) {
     e?.preventDefault();
     const text = draft.trim();
@@ -206,14 +214,14 @@ function Panel({ onClose }: { onClose: () => void }) {
         {ai?.ready && <span className="truncate font-mono text-[11px] text-muted-foreground">{ai.model}</span>}
       </div>
       {conversation.messages.length > 0 && <Button variant="ghost" size="icon-sm" aria-label="新对话" title="新对话" onClick={reset}><SquarePen /></Button>}
-      <Button variant="ghost" size="icon-sm" aria-label="关闭 AI 助手" onClick={close}><X /></Button>
+      <Button variant="ghost" size="icon-sm" aria-label="关闭 AI 助手" onClick={() => close()}><X /></Button>
     </header>
 
     <div ref={scroller} className="flex flex-1 flex-col gap-6 overflow-y-auto overscroll-contain px-4 py-4">
       {!ai ? null : !ai.ready ? <div className="m-auto flex max-w-72 flex-col items-center gap-3 text-center">
         <Sparkles aria-hidden className="size-6 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">还没有设置 AI。填好接口地址、模型和 API Key 后，就可以在这里查询书库、订阅和下载。</p>
-        <Button variant="outline" size="sm" asChild><Link to="/settings/$section" params={{ section: 'ai' }} onClick={close}>去设置 AI</Link></Button>
+        <Button variant="outline" size="sm" asChild><Link to="/settings/$section" params={{ section: 'ai' }} onClick={() => close(false)}>去设置 AI</Link></Button>
       </div> : !turns.length ? <div className="mt-auto flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">可以问书库、订阅和下载的事，也可以让它帮你订阅、补齐缺的卷；会改动东西的操作都会先问你。</p>
         <ul className="flex flex-col gap-1.5">
@@ -265,7 +273,7 @@ export function Assistant({ hideButton = false }: { hideButton?: boolean }) {
   if (open) return <Panel onClose={hide} />;
   if (hideButton) return null;
   // Phones: a 48px circle 16px above the tab bar. Wider screens: a pill with its name, less padding on the icon side.
-  return <Button variant="outline" onClick={() => show()} aria-label="打开 AI 助手"
+  return <Button data-assistant-button variant="outline" onClick={() => show()} aria-label="打开 AI 助手"
     className="fixed right-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 size-12 rounded-full bg-card p-0 shadow-float md:right-6 md:bottom-6 md:h-10 md:w-auto md:pr-3.5 md:pl-3">
     <Sparkles className="size-5 text-seal md:size-4" /><span className="max-md:sr-only">AI 助手</span>
   </Button>;

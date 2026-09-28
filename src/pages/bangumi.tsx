@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Cover } from '@/components/app/cover';
 import { EmptyState, ErrorState, Loading } from '@/components/app/feedback';
+import { Option } from '@/features/library/pickers';
 
 const route = getRouteApi('/_app/discover/bangumi');
 type Match = SourceItem['match']['state'];
@@ -162,17 +163,9 @@ function MatchDialog({ item, onClose }: { item: SourceItem; onClose: () => void 
         {results.error ? <ErrorState error={results.error} className="min-h-40 p-4" />
           : !results.data ? <Loading label="正在搜索…"><div className="flex flex-col gap-1 p-1">{[0, 1, 2].map(i => <Skeleton key={i} className="h-16 rounded-lg" />)}</div></Loading>
           : !results.data.results.length ? <EmptyState icon={<Search />} title="没有找到" description="换个写法再搜一次，例如只搜关键字或作者。" className="min-h-40 p-4" />
-          : results.data.results.map(comic => <button key={comic.key} type="button" role="radio" aria-checked={picked === comic.key} onClick={() => setPicked(comic.key)}
-            className="flex w-full items-center gap-3 rounded-lg p-2 text-left outline-none transition-colors duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-checked:bg-seal-soft/70 aria-checked:ring-1 aria-checked:ring-seal/30">
-            <Cover src={comic.cover} title={comic.title} className="w-9 rounded-md" />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium">{comic.title}</span>
-              <span className="truncate text-xs text-muted-foreground">{[comic.authors.join(' / '), comic.latest && `最新 ${comic.latest}`].filter(Boolean).join(' · ')}</span>
-            </span>
-            <span aria-hidden className={cn('grid size-4 shrink-0 place-items-center rounded-full border border-muted-foreground/60', picked === comic.key && 'border-seal bg-seal')}>
-              {picked === comic.key && <span className="size-1.5 rounded-full bg-seal-foreground" />}
-            </span>
-          </button>)}
+          : results.data.results.map(comic => <Option key={comic.key} name={`match-${item.id}`} checked={picked === comic.key} cover={comic.cover} title={comic.title}
+            meta={[comic.authors.join(' / '), comic.latest && `最新 ${comic.latest}`].filter(Boolean).join(' · ')}
+            onPick={() => setPicked(comic.key)} onChoose={() => { if (!link.isPending) link.mutate(comic.key); }} />)}
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={() => close(false)}>取消</Button>

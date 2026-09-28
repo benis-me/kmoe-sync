@@ -67,7 +67,7 @@ export const TaskRow = memo(function TaskRow({ task }: { task: Task }) {
     className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3.5 px-4 py-3 sm:gap-x-4">
     <Cover src={task.cover} title={task.comicTitle} className="w-9 rounded-md" />
     <div className="flex min-w-0 flex-col gap-0.5">
-      <p className="truncate text-sm font-medium">
+      <p className="-m-1 truncate p-1 text-sm font-medium">
         <Link to="/comics/$key" params={{ key: task.comicKey }} className="rounded-sm decoration-foreground/30 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">{task.comicTitle}</Link>
         <span className="text-muted-foreground"> · </span>{task.itemName}
       </p>

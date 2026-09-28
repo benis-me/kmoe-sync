@@ -249,7 +249,7 @@ export function Chapters({ comicKey, items, states, format, running, library, ch
         <span className="ml-auto hidden text-xs text-muted-foreground pointer-fine:2xl:inline">
           <kbd className="rounded border bg-card px-1 font-sans text-[11px]">Shift</kbd> 可连选
         </span>
-        <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 no-scrollbar max-sm:w-full">
+        <div className="-m-1 flex items-center gap-1 overflow-x-auto p-1 no-scrollbar max-sm:w-full">
           {/* aria-disabled once done, so the focused button keeps keyboard focus instead of dropping it. */}
           <Button variant="ghost" size="sm" disabled={!selectable.length} aria-disabled={allSelected} onClick={() => { if (!allSelected) selectAll(); }}>
             <CheckCheck data-icon="inline-start" />全选可下载<span className="text-muted-foreground tabular-nums">{selectable.length}</span>

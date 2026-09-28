@@ -94,7 +94,7 @@ export function TopBar({ title, actions }: { title: string; actions: (element: H
   </header>;
 }
 
-const tabItem = 'relative z-10 flex flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground outline-none transition-colors duration-150 focus-visible:bg-accent/60 aria-[current=page]:text-foreground';
+const tabItem = 'relative z-10 flex flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-medium text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-[current=page]:text-foreground';
 
 export function TabBar() {
   return <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">

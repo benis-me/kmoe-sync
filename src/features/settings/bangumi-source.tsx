@@ -169,7 +169,7 @@ export function BangumiSourceCard({ bangumi }: { bangumi: MetadataSettings['bang
   return <form id="bangumi-source" noValidate onSubmit={submit} aria-labelledby="bangumi-source-title" className="scroll-mt-20 overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
     <div className="flex flex-col gap-4 p-5 sm:p-6">
       <div className="flex flex-col gap-1">
-        <h3 id="bangumi-source-title" className="font-medium">Bangumi 数据来源</h3>
+        <h3 id="bangumi-source-title" className="text-[15px] font-semibold tracking-tight">Bangumi 数据来源</h3>
         <p className="text-xs leading-relaxed text-muted-foreground">匹配条目、读取简介和标签时，从哪里取 Bangumi 的数据。</p>
       </div>
       <div className="flex flex-col gap-2">

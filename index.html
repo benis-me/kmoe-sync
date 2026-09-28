@@ -18,7 +18,13 @@
           document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : media.matches ? 'dark' : 'light';
         }
         apply();
-        media.addEventListener('change', apply);
+        // A system switch swaps in one frame too, like the sidebar switch: no color transition smears across the page.
+        media.addEventListener('change', function () {
+          var root = document.documentElement;
+          root.classList.add('theme-switching');
+          apply();
+          requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.remove('theme-switching'); }); });
+        });
       })();
     </script>
     <title>Kmoe Sync</title>

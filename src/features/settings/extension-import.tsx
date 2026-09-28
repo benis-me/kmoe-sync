@@ -67,7 +67,7 @@ export function ExtensionImport() {
   return <Card id="import" className="scroll-mt-20 gap-0 py-0">
     <div className="flex flex-col gap-4 p-5 sm:p-6">
       <div className="flex flex-col gap-1">
-        <h3 className="font-medium">导入浏览器扩展配置</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight">导入浏览器扩展配置</h3>
         <p className="text-xs leading-relaxed text-muted-foreground">在扩展的「导出 / 导入」里导出 JSON，拖到这里。WebDAV 服务器会变成存储位置，命名规则一并迁移；导出时包含了密码的话，密码也会导入。</p>
       </div>
       <input ref={input} aria-label="配置文件" type="file" hidden accept=".json,application/json" onChange={e => { void stage(e.target.files?.[0]); e.target.value = ''; }} />

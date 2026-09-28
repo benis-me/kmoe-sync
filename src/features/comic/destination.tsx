@@ -82,21 +82,23 @@ export function DestinationBar({ targets, target, directory, mapped, format, lin
           <Field className="gap-2">
             <FieldTitle aria-hidden>格式</FieldTitle>
             <ToggleGroup type="single" variant="segmented" aria-label="文件格式" value={format} onValueChange={value => { if (value) onFormat(value as Format); }}>
-              <ToggleGroupItem value="epub" className="px-3.5">EPUB</ToggleGroupItem>
-              <ToggleGroupItem value="mobi" className="px-3.5">MOBI</ToggleGroupItem>
+              <ToggleGroupItem value="epub" className="flex-1 px-3.5">EPUB</ToggleGroupItem>
+              <ToggleGroupItem value="mobi" className="flex-1 px-3.5">MOBI</ToggleGroupItem>
             </ToggleGroup>
           </Field>
           <Field className="gap-2">
             <FieldTitle aria-hidden>线路</FieldTitle>
             <ToggleGroup type="single" variant="segmented" aria-label="下载线路" value={String(line)} onValueChange={value => { if (value) onLine(Number(value) as Line); }}>
-              <ToggleGroupItem value="0" className="px-3.5">线路一</ToggleGroupItem>
-              <ToggleGroupItem value="1" className="px-3.5" disabled={!vip} title={vip ? undefined : '线路二仅 VIP 可用'}>线路二</ToggleGroupItem>
+              <ToggleGroupItem value="0" className="flex-1 px-3.5">线路一</ToggleGroupItem>
+              <ToggleGroupItem value="1" className="flex-1 px-3.5" disabled={!vip} title={vip ? undefined : '线路二仅 VIP 可用'}>线路二</ToggleGroupItem>
             </ToggleGroup>
           </Field>
         </div>
         {target && <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2.5 border-t border-border/60 pt-4">
           <div className="flex min-w-0 flex-1 basis-60 flex-col gap-0.5">
             <span className="flex items-center gap-2 text-sm font-medium">文件夹{mapped && <Badge variant="success" className="md:hidden">已对应现有文件夹</Badge>}</span>
+            {/* In full: the bar above cuts it short (on phones, almost always). */}
+            {directory && <span className="font-mono text-xs break-all">{directory}</span>}
             <span className="text-xs leading-relaxed text-muted-foreground">{mapped
               ? '下载到这个已有的文件夹；「已下载」按里面的文件计算。'
               : 'NAS 上已经有这部漫画？对应到那个文件夹，已有的卷就不会重复下载。'}</span>

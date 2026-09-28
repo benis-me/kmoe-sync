@@ -20,7 +20,7 @@ function Row({ label, children, mono }: { label: string; children: ReactNode; mo
 
 function Section({ section, label, value }: { section: string; label: string; value: ReactNode }) {
   return <li>
-    <Link to="/settings/$section" params={{ section }} className="flex items-center gap-4 px-5 py-3 outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:bg-accent/60">
+    <Link to="/settings/$section" params={{ section }} className="flex items-center gap-4 px-5 py-3 outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
       <span className="w-24 shrink-0 self-start text-sm text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 text-sm break-words">{value}</span>
       <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />

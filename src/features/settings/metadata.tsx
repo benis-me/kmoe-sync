@@ -92,7 +92,7 @@ function ConnectionCard({ settings, targets }: { settings: MetadataSettings; tar
   return <form noValidate onSubmit={submit} aria-label="Komga 连接" className="overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
     <div className="flex flex-col gap-6 p-5 sm:p-6">
       <div className="flex flex-col gap-1">
-        <h3 className="font-medium">Komga 连接</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight">Komga 连接</h3>
         <p className="text-xs leading-relaxed text-muted-foreground">Kmoe Sync 通过 Komga 的接口写入元数据，不会改动书库里的文件。</p>
       </div>
       <Field className="gap-2">

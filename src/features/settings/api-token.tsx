@@ -50,7 +50,7 @@ export function ApiSection() {
       <div className="flex items-start gap-4 p-5 sm:p-6">
         <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><KeyRound className="size-4" /></span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 className="font-medium">API 令牌</h3>
+          <h3 className="text-[15px] font-semibold tracking-tight">API 令牌</h3>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {has ? '已生成。令牌只保存摘要，无法再次查看；丢失了就轮换一个新的。' : '还没有令牌。生成后，脚本和 AI 助手就能查询书架、订阅和下载漫画。'}
           </p>
@@ -81,7 +81,7 @@ export function ApiSection() {
 
     <Card className="gap-5 p-5 sm:p-6">
       <div className="flex flex-col gap-1">
-        <h3 className="font-medium">使用方法</h3>
+        <h3 className="text-[15px] font-semibold tracking-tight">使用方法</h3>
         <p className="text-xs leading-relaxed text-muted-foreground">令牌只能操作漫画、订阅和下载；管理员密码、Kmoe 登录、存储位置和通知只能在这里修改。</p>
       </div>
       <Snippet title="REST" code={`curl -H "Authorization: Bearer ${shown}" ${origin}/api/v1/shelf`}

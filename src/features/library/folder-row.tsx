@@ -23,7 +23,7 @@ const Slot = ({ children }: { children: ReactNode }) =>
   <span aria-hidden className={cn(thumb, 'grid aspect-[3/4] place-items-center border border-dashed border-muted-foreground/35 text-muted-foreground [&_svg]:size-3.5')}>{children}</span>;
 const Lines = ({ title, sub, className }: { title: ReactNode; sub: ReactNode; className?: string }) => <span className={cn('flex min-w-0 flex-1 flex-col', className)}>
   <span className="truncate text-[13px] leading-5 font-medium">{title}</span>
-  <span className="flex min-w-0 items-center gap-1.5 truncate text-xs leading-5 text-muted-foreground">{sub}</span>
+  <span className="-my-0.5 flex min-w-0 items-center gap-1.5 truncate py-0.5 text-xs leading-5 text-muted-foreground">{sub}</span>
 </span>;
 const inlineAction = 'rounded-sm font-medium text-foreground/80 underline decoration-foreground/25 underline-offset-4 outline-none hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring';
 

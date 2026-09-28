@@ -44,7 +44,7 @@ function PasswordCard() {
     <Card className="gap-0 py-0">
       <div className="flex flex-col gap-5 p-5 sm:p-6">
         <div className="flex flex-col gap-1">
-          <h3 className="font-medium">管理员密码</h3>
+          <h3 className="text-[15px] font-semibold tracking-tight">管理员密码</h3>
           <p className="text-xs text-muted-foreground">登录这个管理页面用的密码，至少 8 位。</p>
         </div>
         {field('current', '当前密码', 'current-password')}
@@ -74,7 +74,7 @@ function SignOutCard() {
   });
   return <Card className="flex-row items-center gap-4 px-5 py-4 sm:px-6">
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <h3 className="font-medium">退出管理页面</h3>
+      <h3 className="text-[15px] font-semibold tracking-tight">退出管理页面</h3>
       <p className="text-xs text-muted-foreground">下载和追更会在服务器上继续进行。</p>
     </div>
     <Button variant="outline" size="sm" aria-disabled={logout.isPending} onClick={() => { if (!logout.isPending) logout.mutate(); }}>

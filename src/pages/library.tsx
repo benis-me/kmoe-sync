@@ -155,7 +155,8 @@ function LibraryView({ target, targets, filter, onFilter }: { target: Target; ta
       else if (a.action === 'ignore') toast.success(`已忽略「${folder.name}」`, { description: '可以在「已忽略」里恢复。' });
       else if (a.action === 'reset' && was.comic) {
         const comic = was.comic;
-        toast.success(`已取消关联《${comic.title}》`, { description: '文件夹回到「待匹配」，文件不受影响。', action: { label: '撤销', onClick: () => act.mutate({ folder, action: 'confirm', comic: comic.key }) } });
+        // The only undo: it stays until used or closed.
+        toast.success(`已取消关联《${comic.title}》`, { description: '文件夹回到「待匹配」，文件不受影响。', duration: Infinity, action: { label: '撤销', onClick: () => act.mutate({ folder, action: 'confirm', comic: comic.key }) } });
       } else if (a.action === 'reset') toast.success(was.state === 'ignored' ? `已恢复「${folder.name}」` : `已重置「${folder.name}」`, { description: '运行「匹配 Kmoe」时会重新查找。' });
       else if (folder.metadata.komga.state === 'error') toast.error('同步到 Komga 失败', { description: folder.metadata.komga.error ?? undefined });
       else if (folder.metadata.komga.state === 'not_found') toast.warning('Komga 里没有找到这个系列', { description: '先让 Komga 扫描书库，再同步。' });
