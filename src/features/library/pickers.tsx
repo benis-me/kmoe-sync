@@ -192,7 +192,7 @@ export function BangumiDialog({ folderId, label, query: initial, bangumi, onClos
       const komga = folder.metadata.komga.state !== 'disabled';
       if (action.kind === 'remove') toast.success('已取消 Bangumi 匹配');
       else if (state === 'matched') toast.success(`已选择「${name}」`, { description: komga ? '同步后写入 Komga。' : undefined });
-      else if (state === 'suggested') toast.info(`找到 ${candidates.length} 个可能的条目`, { description: '在书库里点「待确认」选一个。' });
+      else if (state === 'suggested') toast.info(`找到 ${candidates.length} 个可能的条目`, { description: '从候选里确认一个，之后同步时写入 Komga。' });
       else toast.warning('Bangumi 上没有找到这部漫画', { description: '可以搜索别的写法，或粘贴 bgm.tv 链接。' });
       close();
     },

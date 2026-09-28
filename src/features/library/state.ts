@@ -1,4 +1,4 @@
-// Library helpers shared by the 书库 page, its dialogs and the comic page: labels, filters, counts and cache updates.
+// Library helpers shared by the 书库 page, its dialogs and the comic page: labels, counts and cache updates.
 import type { QueryClient } from '@tanstack/react-query';
 import { BangumiState, KmoeLinkState, KomgaState, type LibraryCounts, type LibraryFolder, type LibraryJob, type LibraryJobKind, type LibraryOverview, type MetadataSettings } from '@shared/model';
 import { ApiError } from '@/lib/api';
@@ -19,19 +19,6 @@ export const AI_LABELS = {
 } as const;
 /** A job's labels; an 'ai' job is named after the pass this page started, when it knows which. */
 export const jobLabels = (kind: LibraryJobKind, ai: string | null) => kind === 'ai' && ai && ai in AI_LABELS ? AI_LABELS[ai as keyof typeof AI_LABELS] : JOB_LABELS[kind];
-
-export type LibraryFilter = 'all' | KmoeLinkState | 'bangumi' | 'komga';
-export const FILTERS: { value: LibraryFilter; label: string; test: (folder: LibraryFolder) => boolean }[] = [
-  { value: 'all', label: '全部', test: () => true },
-  { value: 'pending', label: '待匹配', test: f => f.kmoe.state === 'pending' },
-  { value: 'suggested', label: '待确认', test: f => f.kmoe.state === 'suggested' },
-  { value: 'unmatched', label: '未找到', test: f => f.kmoe.state === 'unmatched' },
-  { value: 'matched', label: '已关联', test: f => f.kmoe.state === 'matched' },
-  { value: 'ignored', label: '已忽略', test: f => f.kmoe.state === 'ignored' },
-  { value: 'bangumi', label: 'Bangumi 待确认', test: f => f.metadata.bangumi.state === 'suggested' },
-  { value: 'komga', label: 'Komga 失败', test: f => f.metadata.komga.state === 'error' },
-];
-export const FILTER_VALUES = FILTERS.map(f => f.value) as [LibraryFilter, ...LibraryFilter[]];
 
 /** Suggestions at or above this score can be accepted in one go. */
 export const CONFIDENT = 0.9;

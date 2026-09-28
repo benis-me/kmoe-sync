@@ -4,7 +4,8 @@ import { QueryCache, QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { FileQuestion, LoaderCircle } from 'lucide-react';
-import { Format, TaskStatus } from '@shared/model';
+import { KOMGA_STATUSES } from '@shared/folder-status';
+import { BangumiState, Format, KmoeLinkState, TaskStatus } from '@shared/model';
 import { ApiError, errorMessage } from '@/lib/api';
 import { authQuery } from '@/lib/queries';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,6 @@ import { ComicPage } from '@/pages/comic';
 import { LibraryPage } from '@/pages/library';
 import { DownloadsPage } from '@/pages/downloads';
 import { SettingsLayout, SettingsSectionPage, isSection } from '@/pages/settings';
-import { FILTER_VALUES } from '@/features/library/state';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -96,7 +96,10 @@ const bangumiRoute = createRoute({
 
 const libraryRoute = createRoute({
   getParentRoute: () => appRoute, path: 'library', component: LibraryPage, staticData: { title: '书库整理' },
-  validateSearch: z.object({ targetId: optional(z.coerce.number().int()), filter: optional(z.enum(FILTER_VALUES)) }),
+  validateSearch: z.object({
+    targetId: optional(z.coerce.number().int()), view: optional(z.enum(['todo'])),
+    kmoe: optional(KmoeLinkState), bangumi: optional(BangumiState), komga: optional(z.enum(KOMGA_STATUSES)),
+  }),
 });
 
 const comicRoute = createRoute({

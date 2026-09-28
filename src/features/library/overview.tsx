@@ -1,8 +1,9 @@
 // 书库 overview: the status strip (counts + the job each column starts), the running job, and the first-run intro.
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Check, FolderSearch, Link2, LoaderCircle, RefreshCw, ScanSearch, Settings2, Sparkles, Tags, WandSparkles, X } from 'lucide-react';
 import { cn } from 'cn';
+import { STAGES, countBy, optionOf, type FolderFilters, type Stage } from '@shared/folder-status';
 import type { LibraryJob, LibraryJobKind, LibraryOverview, MetadataSettings, Target } from '@shared/model';
 import { fromNow, percent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -24,9 +25,22 @@ function Cell({ label, value, sub, action, tone, className }: { label: string; v
   </div>;
 }
 
-// Lines break only between parts, never between a label and its number.
-const parts = (...items: [string, number, string?][]) => items.filter(([, n]) => n > 0)
-  .map(([label, n, tone], i) => <span key={label} className={tone}>{i > 0 && <span className="text-muted-foreground"> · </span>}<span className="whitespace-nowrap">{label} {n}</span></span>);
+type Pick = (stage: Stage, value: string) => void;
+
+/** A stage's counts, each one filtering the list to its folders (and off again when it is on). Lines break only between counts. */
+function Picks({ stage, values, counts, filters, onPick }: { stage: Stage; values: string[]; counts: Record<string, number>; filters: FolderFilters; onPick: Pick }) {
+  return values.filter(value => counts[value]).map((value, i) => {
+    const option = optionOf(stage, value)!, on = filters[stage] === value;
+    return <Fragment key={value}>
+      {i > 0 && <span aria-hidden> · </span>}
+      <button type="button" aria-pressed={on} aria-label={`${STAGES[stage].label} ${option.label} ${counts[value]}`} onClick={() => onPick(stage, value)}
+        className={cn('relative -mx-1 rounded-sm px-1 whitespace-nowrap underline decoration-current/30 underline-offset-[3px] outline-none transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-1 hover:decoration-current focus-visible:ring-2 focus-visible:ring-ring',
+          { warning: 'text-warning', destructive: 'text-destructive' }[option.tone as string], on && 'bg-seal-soft text-seal no-underline')}>
+        {option.label} {counts[value]}
+      </button>
+    </Fragment>;
+  });
+}
 
 /** Starts one kind of job; shows its spinner while it is being started or runs, and waits while another job runs. */
 function JobButton({ kind, jobs, icon, children }: { kind: JobStart; jobs: JobControl; icon: ReactNode; children: ReactNode }) {
@@ -46,38 +60,41 @@ const settingsLink = (label: string, section: 'account' | 'metadata', hash?: str
 const Actions = ({ children }: { children: ReactNode }) => <div className="flex flex-wrap items-center">{children}</div>;
 
 /** `metadata` null: the metadata settings could not be read (shown as not enabled). `ai`: AI is set up (设置 → AI). */
-export function LibraryStrip({ overview, metadata, kmoeActive, ai, jobs }: { overview: LibraryOverview; metadata: MetadataSettings | null; kmoeActive: boolean; ai: boolean; jobs: JobControl }) {
+/** `filters`/`onPick`: the list's filters, which the counts show and set. */
+export function LibraryStrip({ overview, metadata, kmoeActive, ai, jobs, filters, onPick }: {
+  overview: LibraryOverview; metadata: MetadataSettings | null; kmoeActive: boolean; ai: boolean; jobs: JobControl; filters: FolderFilters; onPick: Pick;
+}) {
   const { counts, folders, scannedAt } = overview;
-  const { kmoe, bangumi, komga } = counts;
+  // Counted like the rows and the filter menus read them, so a count shows exactly as many rows.
+  const kmoe = countBy(folders, 'kmoe'), bangumi = countBy(folders, 'bangumi'), komga = countBy(folders, 'komga');
+  const n = (tally: Record<string, number>, ...values: string[]) => values.reduce((sum, value) => sum + (tally[value] ?? 0), 0);
   const metaOn = !!metadata?.enabled;
-  const komgaOff = counts.folders > 0 && komga.disabled === counts.folders;
-  const toSync = folders.filter(f => f.metadata.komga.state !== 'disabled' && f.metadata.bangumi.state === 'matched' && (f.metadata.komga.dirty || f.metadata.komga.state === 'pending')).length;
+  const komgaOff = counts.folders > 0 && counts.komga.disabled === counts.folders;
   const done = counts.folders ? '全部处理完了' : '—';
-  const kmoeSub = parts(['待确认', kmoe.suggested, 'text-warning'], ['未找到', kmoe.unmatched], ['待匹配', kmoe.pending]);
-  const bangumiSub = parts(['待确认', bangumi.suggested, 'text-warning'], ['未找到', bangumi.unmatched], ['未匹配', bangumi.none]);
-  const komgaSub = parts(['失败', komga.error, 'text-destructive'], ['待同步', toSync], ['未找到系列', komga.not_found]);
+  const picks = (stage: Stage, tally: Record<string, number>, values: string[], otherwise: ReactNode) =>
+    n(tally, ...values) ? <Picks stage={stage} values={values} counts={tally} filters={filters} onPick={onPick} /> : otherwise;
   // Bangumi unreachable with the chosen source: say so and point at the source settings instead of a job that would fail.
   const noBangumi = bangumiBlocked(metadata?.bangumi);
   return <section aria-label="书库概览" className={cn('grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border shadow-soft ring-1 ring-border', metaOn ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
     <Cell label="文件夹" value={`${counts.folders} 个`} sub={`${counts.books} 本 · ${scannedAt ? `${fromNow(scannedAt)}扫描` : '尚未扫描'}`}
       action={<JobButton kind="scan" jobs={jobs} icon={<ScanSearch data-icon="inline-start" />}>{scannedAt ? '重新扫描' : '扫描书库'}</JobButton>} />
-    <Cell label="Kmoe" value={`已关联 ${kmoe.matched}`} sub={!kmoeActive ? <span className="text-warning">登录 Kmoe 后才能匹配</span> : kmoeSub.length ? kmoeSub : done}
+    <Cell label="Kmoe" value={`已关联 ${n(kmoe, 'matched')}`} sub={!kmoeActive ? <span className="text-warning">登录 Kmoe 后才能匹配</span> : picks('kmoe', kmoe, ['suggested', 'unmatched', 'pending'], done)}
       action={kmoeActive ? <Actions>
         <JobButton kind="kmoe" jobs={jobs} icon={<Link2 data-icon="inline-start" />}>匹配 Kmoe</JobButton>
-        {ai && kmoe.suggested + kmoe.unmatched > 0 && <JobButton kind="ai-kmoe" jobs={jobs} icon={<Sparkles data-icon="inline-start" />}>AI 判定</JobButton>}
+        {ai && n(kmoe, 'suggested', 'unmatched') > 0 && <JobButton kind="ai-kmoe" jobs={jobs} icon={<Sparkles data-icon="inline-start" />}>AI 判定</JobButton>}
       </Actions> : settingsLink('登录 Kmoe', 'account')} />
     {metaOn ? <>
-      <Cell label="Bangumi" value={`已匹配 ${bangumi.matched}`} sub={noBangumi ? <span className="text-warning" title={noBangumi}>{noBangumi}</span> : bangumiSub.length ? bangumiSub : done}
+      <Cell label="Bangumi" value={`已匹配 ${n(bangumi, 'matched')}`} sub={noBangumi ? <span className="text-warning" title={noBangumi}>{noBangumi}</span> : picks('bangumi', bangumi, ['suggested', 'unmatched', 'none'], done)}
         action={noBangumi ? settingsLink('设置数据来源', 'metadata', 'bangumi-source') : <Actions>
           <JobButton kind="bangumi" jobs={jobs} icon={<Tags data-icon="inline-start" />}>匹配 Bangumi</JobButton>
-          {ai && bangumi.suggested + bangumi.unmatched > 0 && <JobButton kind="ai-bangumi" jobs={jobs} icon={<Sparkles data-icon="inline-start" />}>AI 判定</JobButton>}
+          {ai && n(bangumi, 'suggested', 'unmatched') > 0 && <JobButton kind="ai-bangumi" jobs={jobs} icon={<Sparkles data-icon="inline-start" />}>AI 判定</JobButton>}
         </Actions>} />
       {komgaOff
         ? <Cell label="Komga" value="未对应" tone="text-muted-foreground" sub="这个存储位置没有对应的 Komga 库" action={settingsLink('去设置', 'metadata')} />
-        : <Cell label="Komga" value={`已同步 ${komga.synced}`} sub={komgaSub.length ? komgaSub : counts.folders ? '都是最新的' : '—'}
+        : <Cell label="Komga" value={`已同步 ${n(komga, 'synced')}`} sub={picks('komga', komga, ['error', 'pending', 'not_found'], counts.folders ? '都是最新的' : '—')}
           action={<Actions>
             <JobButton kind="komga" jobs={jobs} icon={<RefreshCw data-icon="inline-start" />}>同步到 Komga</JobButton>
-            {ai && bangumi.matched > 0 && <JobButton kind="ai-polish" jobs={jobs} icon={<WandSparkles data-icon="inline-start" />}>AI 整理</JobButton>}
+            {ai && n(bangumi, 'matched') > 0 && <JobButton kind="ai-polish" jobs={jobs} icon={<WandSparkles data-icon="inline-start" />}>AI 整理</JobButton>}
           </Actions>} />}
     </> : <Cell className="col-span-2 lg:col-span-1" label="元数据" value="未开启" tone="text-muted-foreground" sub="从 Bangumi 补全简介和标签，写入 Komga"
       action={settingsLink('设置 Komga 元数据', 'metadata')} />}

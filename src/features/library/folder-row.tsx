@@ -4,6 +4,7 @@ import { memo, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ArrowUpRight, BookOpen, Check, CircleDashed, Ellipsis, EyeOff, Folder, Link2, LoaderCircle, RefreshCw, RotateCcw, SearchX, Sparkles, Tags, Undo2 } from 'lucide-react';
 import { cn } from 'cn';
+import { statusOf } from '@shared/folder-status';
 import type { AiVerdict, LibraryFolder } from '@shared/model';
 import { FORMAT_LABELS, fromNow } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -99,9 +100,10 @@ function BangumiLine({ folder, onPick }: { folder: LibraryFolder; onPick: (opene
 }
 
 function KomgaLine({ folder }: { folder: LibraryFolder }) {
-  const { state, dirty, syncedAt, seriesUrl, error } = folder.metadata.komga;
-  if (state === 'pending' && folder.metadata.bangumi.state !== 'matched') return <span className="text-muted-foreground" title="选好 Bangumi 条目后才能同步">—</span>;
-  if (state === 'error') return <Tooltip>
+  const { syncedAt, seriesUrl, error } = folder.metadata.komga;
+  const status = statusOf(folder, 'komga');
+  if (status === 'waiting') return <span className="text-muted-foreground" title="选好 Bangumi 条目后才能同步">—</span>;
+  if (status === 'error') return <Tooltip>
     <TooltipTrigger asChild>
       <span tabIndex={0} className="flex min-w-0 cursor-default items-center gap-1.5 rounded-sm text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <Dot tone="destructive" className="size-1.5" /><span className="truncate">同步失败</span><span className="sr-only">：{error}</span>
@@ -109,10 +111,10 @@ function KomgaLine({ folder }: { folder: LibraryFolder }) {
     </TooltipTrigger>
     <TooltipContent className="max-w-72">{error ?? '写入 Komga 失败'}</TooltipContent>
   </Tooltip>;
-  if (state === 'not_found') return <span className="flex min-w-0 items-center gap-1.5 text-warning" title="Komga 里还没有这个文件夹的系列：先让 Komga 扫描书库，再同步。">
+  if (status === 'not_found') return <span className="flex min-w-0 items-center gap-1.5 text-warning" title="Komga 里还没有这个文件夹的系列：先让 Komga 扫描书库，再同步。">
     <Dot tone="warning" className="size-1.5" /><span className="truncate">未找到系列</span>
   </span>;
-  if (state === 'pending' || dirty) return <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground"><Dot tone="muted" className="size-1.5" />待同步</span>;
+  if (status === 'pending') return <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground"><Dot tone="muted" className="size-1.5" />待同步</span>;
   const text = <><Dot tone="success" className="size-1.5" /><span className="truncate">已同步{syncedAt && ` · ${fromNow(syncedAt)}`}</span></>;
   return seriesUrl ? <a href={seriesUrl} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1.5 rounded-sm outline-none hover:underline hover:decoration-foreground/30 hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring">
     {text}<ArrowUpRight aria-hidden className="size-3 shrink-0 text-muted-foreground" />

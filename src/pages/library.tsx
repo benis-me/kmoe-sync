@@ -3,8 +3,9 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, getRouteApi } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CircleAlert, FolderX, HardDrive, ScanSearch, Search, SearchX, Settings2, X } from 'lucide-react';
+import { CircleAlert, CircleCheck, FolderX, HardDrive, ScanSearch, Search, SearchX, Settings2, X } from 'lucide-react';
 import { cn } from 'cn';
+import { STAGES, STAGE_KEYS, countBy, optionOf, passes, statusOf, type FolderFilters, type Stage } from '@shared/folder-status';
 import type { LibraryFolder, LibraryJob, LibraryOverview, Target } from '@shared/model';
 import { request } from '@/lib/api';
 import { searchKey } from '@/lib/format';
@@ -14,26 +15,25 @@ import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { EmptyState, ErrorState, Loading } from '@/components/app/feedback';
 import { Page, PageHeader } from '@/components/app/page';
+import { StageMenu } from '@/features/library/filters';
 import { FolderRow, type FolderAction, type RowHandlers } from '@/features/library/folder-row';
 import { PolishBanner, PolishReview } from '@/features/library/ai-polish';
 import { AcceptSuggestions, JobBar, LibraryIntro, LibraryStrip, type JobControl, type JobStart } from '@/features/library/overview';
 import { BangumiDialog, LinkKmoeDialog } from '@/features/library/pickers';
-import { CONFIDENT, FILTERS, applyFolder, applyJob, bestScore, isCurrent, jobLabels, type LibraryFilter } from '@/features/library/state';
+import { CONFIDENT, applyFolder, applyJob, bestScore, isCurrent, jobLabels } from '@/features/library/state';
 
 const route = getRouteApi('/_app/library');
 const collator = new Intl.Collator('zh-CN', { numeric: true });
-const KMOE_FILTERS = FILTERS.filter(f => f.value !== 'bangumi' && f.value !== 'komga');
-const META_FILTERS = FILTERS.filter(f => f.value === 'bangumi' || f.value === 'komga');
 /** A dialog opened for a folder, and what gets focus back when it closes. */
 type Opened = { folder: LibraryFolder; opener: HTMLElement | null };
 
 export function LibraryPage() {
-  const { targetId, filter = 'all' } = route.useSearch();
+  const { targetId, view, kmoe, bangumi, komga } = route.useSearch();
   const navigate = route.useNavigate();
+  const filters = useMemo<FolderFilters>(() => ({ todo: view === 'todo', kmoe, bangumi, komga }), [view, kmoe, bangumi, komga]);
   const targets = useQuery(targetsQuery);
   const { data: defaultId } = useQuery({ ...settingsQuery, select: settings => settings.defaultTargetId });
   const list = targets.data ?? [];
@@ -55,8 +55,8 @@ export function LibraryPage() {
       : !target ? <EmptyState icon={<HardDrive />} title="还没有存储位置" description="先添加一个本地目录或 WebDAV 书库，再扫描里面已有的漫画。" className="border">
         <Button asChild><Link to="/settings/$section" params={{ section: 'storage' }}>添加存储位置</Link></Button>
       </EmptyState>
-      : <LibraryView key={target.id} target={target} targets={list} filter={filter}
-        onFilter={next => void navigate({ search: old => ({ ...old, filter: next === 'all' ? undefined : next }), replace: true, resetScroll: false })} />}
+      : <LibraryView key={target.id} target={target} targets={list} filters={filters}
+        onFilters={next => void navigate({ search: old => ({ targetId: old.targetId, view: next.todo ? 'todo' : undefined, kmoe: next.kmoe, bangumi: next.bangumi, komga: next.komga }), replace: true, resetScroll: false })} />}
   </Page>;
 }
 
@@ -88,7 +88,7 @@ function useJobEndToast(job: LibraryJob | undefined, ai: JobStart | null) {
   }, [job, ai]);
 }
 
-function LibraryView({ target, targets, filter, onFilter }: { target: Target; targets: Target[]; filter: LibraryFilter; onFilter: (filter: LibraryFilter) => void }) {
+function LibraryView({ target, targets, filters, onFilters }: { target: Target; targets: Target[]; filters: FolderFilters; onFilters: (filters: FolderFilters) => void }) {
   const client = useQueryClient();
   const library = useQuery(libraryQuery(target.id));
   const meta = useQuery(metadataSettingsQuery);
@@ -171,14 +171,18 @@ function LibraryView({ target, targets, filter, onFilter }: { target: Target; ta
   const folders = useMemo(() => [...overview?.folders ?? []].sort((a, b) => collator.compare(a.path, b.path)), [overview?.folders]);
   const needle = searchKey(q);
   const matched = useMemo(() => needle ? folders.filter(f => searchKey(`${f.path}${f.hint ?? ''}${f.kmoe.comic?.title ?? ''}`).includes(needle)) : folders, [folders, needle]);
-  const current = FILTERS.find(f => f.value === filter) ?? FILTERS[0]!;
-  const visible = useMemo(() => matched.filter(current.test), [matched, current]);
+  const showMeta = !!meta.data?.enabled || folders.some(f => f.metadata.bangumi.state !== 'none');
+  // The stages this target shows (Komga only where it is set up); a filter on a hidden stage is dropped, never applied unseen.
+  const stages = useMemo(() => STAGE_KEYS.filter(stage => stage === 'kmoe' || (showMeta && (stage === 'bangumi' || folders.some(f => statusOf(f, 'komga') !== null)))), [folders, showMeta]);
+  const applied = useMemo<FolderFilters>(() => ({
+    todo: filters.todo, kmoe: filters.kmoe, bangumi: stages.includes('bangumi') ? filters.bangumi : undefined, komga: stages.includes('komga') ? filters.komga : undefined,
+  }), [filters, stages]);
+  const visible = useMemo(() => matched.filter(f => passes(f, applied, showMeta)), [matched, applied, showMeta]);
   // Hundreds of rows: typing and filter clicks respond at once, the list follows in an interruptible render.
   const shown = useDeferredValue(visible);
   const confident = folders.filter(f => f.kmoe.state === 'suggested' && bestScore(f) >= CONFIDENT).length;
   const polished = folders.filter(f => f.metadata.polish === 'pending').length;
   const metaReady = meta.data !== undefined || !!meta.error;
-  const showMeta = !!meta.data?.enabled || folders.some(f => f.metadata.bangumi.state !== 'none');
   const failed = job && !job.running && job.error && job.targetId === target.id && job.finishedAt !== dismissed ? job : null;
   const here = running?.targetId === target.id;
 
@@ -212,37 +216,44 @@ function LibraryView({ target, targets, filter, onFilter }: { target: Target; ta
     </div>;
   }
 
-  const count = (test: (folder: LibraryFolder) => boolean) => matched.filter(test).length;
-  const metaFilters = META_FILTERS.filter(f => showMeta && (filter === f.value || count(f.test) > 0));
+  // What each control offers: the view switch and every stage menu count with their own filter left out.
+  const views = { all: matched.filter(f => passes(f, { ...applied, todo: false }, showMeta)).length, todo: matched.filter(f => passes(f, { ...applied, todo: true }, showMeta)).length };
+  const menus = stages.map(stage => ({ stage, counts: countBy(matched.filter(f => passes(f, applied, showMeta, stage)), stage) }));
+  const filtered = applied.todo || stages.some(stage => applied[stage]);
+  const setStage = (stage: Stage, value: string | undefined) => onFilters({ ...applied, [stage]: value } as FolderFilters);
+  // A count in the strip shows exactly those folders; picking the one that is on turns it off again.
+  const pick = (stage: Stage, value: string) => {
+    if (applied[stage] === value) return setStage(stage, undefined);
+    setQ('');
+    onFilters({ [stage]: value } as FolderFilters);
+  };
+  const clear = () => { onFilters({}); setQ(''); search.current?.focus(); };
+  const label = [applied.todo ? '待处理' : '', ...stages.map(stage => {
+    const option = optionOf(stage, applied[stage]);
+    return option ? `${STAGES[stage].label} ${option.label}` : '';
+  })].filter(Boolean).join('、') || '全部';
   return <>
     <div className="flex flex-col">
-      <LibraryStrip overview={overview} metadata={meta.data ?? null} kmoeActive={kmoeActive} ai={aiReady} jobs={jobs} />
+      <LibraryStrip overview={overview} metadata={meta.data ?? null} kmoeActive={kmoeActive} ai={aiReady} jobs={jobs} filters={applied} onPick={pick} />
       {jobArea}
     </div>
 
     <section aria-label="文件夹" className="flex flex-col gap-4">
-      {confident > 0 && (filter === 'all' || filter === 'suggested') && <AcceptSuggestions count={confident} pending={accept.isPending} onAccept={() => accept.mutate()} />}
+      {confident > 0 && (!applied.kmoe || applied.kmoe === 'suggested') && !applied.bangumi && !applied.komga
+        && <AcceptSuggestions count={confident} pending={accept.isPending} onAccept={() => accept.mutate()} />}
       {polished > 0 && <PolishBanner count={polished} onOpen={() => setReviewing(true)} />}
-      {/* Filters scroll sideways on phones; the search wraps to its own line when the row is full. */}
+      {/* One row on wide screens. On phones: the search, then the view switch (and 清除), then the stage menus. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="-mx-1 max-w-[calc(100%+0.5rem)] overflow-x-auto px-1 py-1 no-scrollbar">
-          <ToggleGroup type="single" variant="segmented" aria-label="按 Kmoe 关联筛选" value={KMOE_FILTERS.some(f => f.value === filter) ? filter : ''} onValueChange={value => value && onFilter(value as LibraryFilter)}>
-            {KMOE_FILTERS.filter(f => f.value !== 'pending' || filter === 'pending' || count(f.test) > 0).map(item => {
-              const n = count(item.test);
-              return <ToggleGroupItem key={item.value} value={item.value} className="px-3" aria-label={`${item.label} ${n}`}>
-                {item.label}<span key={n} className="inline-block min-w-3 animate-tick text-xs text-muted-foreground tabular-nums">{n}</span>
-              </ToggleGroupItem>;
-            })}
-          </ToggleGroup>
+        <ToggleGroup type="single" variant="segmented" aria-label="显示的文件夹" value={applied.todo ? 'todo' : 'all'} onValueChange={value => value && onFilters({ ...applied, todo: value === 'todo' })}>
+          {([['all', '全部', views.all], ['todo', '待处理', views.todo]] as const).map(([value, text, n]) => <ToggleGroupItem key={value} value={value} className="px-3" aria-label={`${text} ${n}`}>
+            {text}<span key={n} className="inline-block min-w-3 animate-tick text-xs text-muted-foreground tabular-nums">{n}</span>
+          </ToggleGroupItem>)}
+        </ToggleGroup>
+        <div role="group" aria-label="按状态筛选" className="flex flex-wrap items-center gap-2 max-sm:order-3 max-sm:basis-full">
+          {menus.map(({ stage, counts }) => <StageMenu key={stage} stage={stage} value={applied[stage]} counts={counts} onChange={value => setStage(stage, value)} />)}
         </div>
-        {metaFilters.map(item => {
-          const n = count(item.test);
-          return <Toggle key={item.value} variant="outline" pressed={filter === item.value} onPressedChange={on => onFilter(on ? item.value : 'all')} aria-label={`${item.label} ${n}`}
-            className="shrink-0 gap-1.5 px-3 data-[state=on]:border-seal/45 data-[state=on]:bg-seal-soft data-[state=on]:text-seal">
-            {item.label}<span className="text-xs font-normal tabular-nums">{n}</span>
-          </Toggle>;
-        })}
-        <InputGroup className="ml-auto min-w-44 flex-1 max-sm:order-first sm:max-w-64">
+        {filtered && <Button variant="ghost" className="text-muted-foreground max-sm:order-2 max-sm:ml-auto" onClick={() => onFilters({})}><X data-icon="inline-start" />清除筛选</Button>}
+        <InputGroup className="ml-auto min-w-44 flex-1 max-sm:order-first max-sm:basis-full sm:max-w-64">
           <InputGroupAddon><Search /></InputGroupAddon>
           <InputGroupInput ref={search} type="search" aria-label="搜索文件夹" placeholder="搜索文件夹或漫画" value={q} onChange={e => setQ(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape' && q) { e.preventDefault(); setQ(''); } }} />
@@ -250,15 +261,20 @@ function LibraryView({ target, targets, filter, onFilter }: { target: Target; ta
         </InputGroup>
       </div>
 
-      <div role="status" aria-live="polite" className="sr-only">{q || filter !== 'all' ? `找到 ${visible.length} 个文件夹` : ''}</div>
-      {!visible.length ? <EmptyState icon={<SearchX />} title="没有符合条件的文件夹" description={q ? `没有和「${q}」相关的文件夹。` : '换个筛选条件看看。'} className="border">
-        <Button variant="outline" onClick={() => { onFilter('all'); setQ(''); search.current?.focus(); }}>清除筛选</Button>
-      </EmptyState> : <div className="overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
+      <div role="status" aria-live="polite" className="sr-only">{q || filtered ? `找到 ${visible.length} 个文件夹` : ''}</div>
+      {!visible.length ? applied.todo && !q && label === '待处理'
+        ? <EmptyState icon={<CircleCheck />} title="没有待处理的文件夹" description="要你确认或手动选择的匹配都处理完了，Komga 同步也没有出错。" className="border">
+          <Button variant="outline" onClick={clear}>查看全部文件夹</Button>
+        </EmptyState>
+        : <EmptyState icon={<SearchX />} title="没有符合条件的文件夹" description={q ? `没有和「${q}」相关的文件夹。` : '换个筛选条件看看。'} className="border">
+          <Button variant="outline" onClick={clear}>清除筛选</Button>
+        </EmptyState>
+      : <div className="overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
         <div aria-hidden className={cn('hidden gap-x-4 border-b bg-muted/35 px-5 py-2 text-xs text-muted-foreground lg:grid',
           showMeta ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_2rem]' : 'grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_2rem]')}>
           <span className="pl-7">文件夹</span><span>Kmoe 漫画</span>{showMeta && <span>元数据</span>}
         </div>
-        <ul aria-label={`${current.label}的文件夹`} className={cn('flex flex-col divide-y transition-opacity duration-150', shown !== visible && 'opacity-60')}>
+        <ul aria-label={`${label}的文件夹`} className={cn('flex flex-col divide-y transition-opacity duration-150', shown !== visible && 'opacity-60')}>
           {/* The index only staggers the first rows in; capping it keeps the others memoized when the filter changes. */}
           {shown.map((folder, index) => <FolderRow key={folder.id} folder={folder} index={Math.min(index, 15)} pending={pending.get(folder.id) ?? null}
             busy={isCurrent(running ?? undefined, folder)} meta={showMeta} handlers={handlers} />)}
