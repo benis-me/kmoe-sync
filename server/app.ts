@@ -110,6 +110,16 @@ function createCore(config: Config, options: AppOptions) {
       const token = /^Bearer\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')?.[1];
       return Boolean(hash && token && safeEqual(sha256(token), hash));
     },
+    /** Scheduler step: an expired session with a remembered password logs in again by itself; what went wrong is logged. */
+    async autoLogin() {
+      const result = await kmoe.autoLogin();
+      if (result?.outcome === 'failed') {
+        activity.add({ kind: 'session_expired', level: 'error', title: 'Kmoe 自动重新登录失败，下载已暂停', detail: `${result.message}。已删除保存的密码，请在设置中重新登录。` });
+      } else if (result?.outcome === 'retry' && result.first) {
+        activity.add({ kind: 'info', level: 'warning', title: 'Kmoe 自动重新登录暂时没成功，稍后再试', detail: result.message });
+      }
+      if (result) app.emitStatus();
+    },
     /** After a quota refresh: continue a queue that was paused for quota once there is room again. */
     resumeIfQuotaRecovered() {
       const account = kmoe.account();
@@ -124,13 +134,15 @@ function createCore(config: Config, options: AppOptions) {
   kmoe.setHooks({
     expired(message) {
       worker.pause('auth');
-      activity.add({ kind: 'session_expired', level: 'error', title: 'Kmoe 登录已失效，下载已暂停', detail: `${message}。请在设置中重新登录。` });
+      // With a remembered password the scheduler logs in again within a minute: no notification unless that fails.
+      if (kmoe.autoLoginReady()) activity.add({ kind: 'info', level: 'warning', title: 'Kmoe 登录已失效，正在自动重新登录', detail: message });
+      else activity.add({ kind: 'session_expired', level: 'error', title: 'Kmoe 登录已失效，下载已暂停', detail: `${message}。请在设置中重新登录。` });
       app.emitStatus();
     },
-    restored() {
-      if (settings.pause().reason !== 'auth') return;
-      worker.resume();
-      activity.add({ kind: 'session_restored', level: 'success', title: 'Kmoe 已重新登录，下载继续' });
+    restored(auto) {
+      const paused = settings.pause().reason === 'auth';
+      if (paused) worker.resume();
+      if (paused || auto) activity.add({ kind: 'session_restored', level: 'success', title: `${auto ? '已自动重新登录 Kmoe' : 'Kmoe 已重新登录'}${paused ? '，下载继续' : ''}` });
       app.emitStatus();
     },
   });
@@ -261,6 +273,7 @@ export function createApp(config: Config, options: AppOptions = {}) {
     if (ticking) return;
     ticking = true;
     try {
+      await app.autoLogin();
       const account = kmoe.account();
       if (account.state === 'active' && (!refreshedSinceStart || !account.checkedAt || Date.now() - Date.parse(account.checkedAt) > ACCOUNT_REFRESH_MS)) {
         refreshedSinceStart = true;

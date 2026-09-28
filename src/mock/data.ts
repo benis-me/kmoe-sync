@@ -270,7 +270,7 @@ const LOCAL_TARGET: Target = { id: 1, kind: 'local', name: '本地书库', path:
 function emptyDb(): MockDb {
   return {
     auth: { setupRequired: false, authenticated: true, password: 'demo1234', csrf: 'mock-csrf' },
-    kmoe: { state: 'none', email: null, mirror: null, level: null, vip: null, free: null, vipQuota: null, remainingMB: null, checkedAt: null, error: null, throttledUntil: null },
+    kmoe: { state: 'none', email: null, mirror: null, level: null, vip: null, free: null, vipQuota: null, remainingMB: null, checkedAt: null, error: null, throttledUntil: null, remember: false },
     settings: structuredClone(DEFAULT_SETTINGS),
     token: null,
     ai: { provider: 'deepseek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash', useProxy: false, monthlyTokens: 0, key: null, tokens: 0 },
@@ -315,7 +315,7 @@ function seedLibrary(db: MockDb, scenario: Exclude<Scenario, 'setup' | 'fresh'>)
     free: { totalMB: 1024, usedMB: paused ? 1000 : 820, resetDay: 1 },
     vipQuota: { totalMB: 5120, usedMB: paused ? 4700 : 3740, resetDay: 1 },
     remainingMB: paused ? 444 : 1584,
-    checkedAt: ago(6), error: expired ? 'Kmoe 会话已过期，请重新登录' : null, throttledUntil: null,
+    checkedAt: ago(6), error: expired ? 'Kmoe 会话已过期，请重新登录' : null, throttledUntil: null, remember: false,
   };
   if (paused) db.queue = { paused: true, reason: 'quota' };
   if (expired) db.queue = { paused: true, reason: 'auth' };

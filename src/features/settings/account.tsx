@@ -1,4 +1,4 @@
-// Kmoe 账号: sign in (the password is used once), mirror, level/VIP, quotas with reset day, refresh and sign out.
+// Kmoe 账号: sign in (the password used once, or kept sealed to log in again by itself), mirror, level/VIP, quotas, refresh and sign out.
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -13,11 +13,15 @@ import { mirrorsQuery, settingsQuery, statusQuery } from '@/lib/queries';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardFooter } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { ConfirmAction, Notice } from '@/components/app/feedback';
 import { FieldMessage, PasswordInput } from '@/components/app/fields';
+import { refocus, useClosable } from '@/features/library/pickers';
 import { SectionSkeleton, SettingRow, usePatchSettings } from './common';
 
 function useSetAccount() {
@@ -28,13 +32,13 @@ function useSetAccount() {
   };
 }
 
-function MirrorSelect({ id, value, onChange }: { id: string; value: string; onChange: (mirror: string) => void }) {
+function MirrorSelect({ id, value, busy, onChange }: { id: string; value: string; busy?: boolean; onChange: (mirror: string) => void }) {
   const { data: mirrors } = useQuery(mirrorsQuery);
   // No preference saved means the server uses its first mirror: show that instead of an empty picker.
   const current = value || mirrors?.[0] || '';
   const options = [...new Set([current, ...(mirrors ?? [])])].filter(Boolean);
-  return <Select value={current} onValueChange={onChange}>
-    <SelectTrigger id={id} className="w-full font-mono text-[13px] sm:w-48"><SelectValue placeholder="选择镜像" /></SelectTrigger>
+  return <Select value={current} onValueChange={mirror => { if (!busy) onChange(mirror); }}>
+    <SelectTrigger id={id} aria-disabled={busy || undefined} className="w-full font-mono text-[13px] sm:w-48"><SelectValue placeholder="选择镜像" /></SelectTrigger>
     <SelectContent position="popper"><SelectGroup>{options.map(mirror => <SelectItem key={mirror} value={mirror} className="font-mono text-[13px]">{mirror}</SelectItem>)}</SelectGroup></SelectContent>
   </Select>;
 }
@@ -44,16 +48,17 @@ function LoginForm({ account, mirror }: { account: KmoeAccount; mirror: string }
   const [email, setEmail] = useState(account.email ?? '');
   const [password, setPassword] = useState('');
   const [site, setSite] = useState(mirror);
+  const [remember, setRemember] = useState(account.remember);
   const [errors, setErrors] = useState<FieldErrors>({});
   const login = useMutation({
-    mutationFn: () => request('POST /api/kmoe/login', { body: { email, password, mirror: site } }),
+    mutationFn: () => request('POST /api/kmoe/login', { body: { email, password, mirror: site, remember } }),
     onSuccess: kmoe => { setPassword(''); setAccount(kmoe); toast.success('已登录 Kmoe', { description: kmoe.email ?? undefined }); },
     onError: error => { setErrors({ password: errorMessage(error) }); document.getElementById('kmoe-password')?.focus(); },
   });
   function submit(e: FormEvent) {
     e.preventDefault();
     if (login.isPending) return;
-    const parsed = endpoints['POST /api/kmoe/login'].body.safeParse({ email, password, mirror: site });
+    const parsed = endpoints['POST /api/kmoe/login'].body.safeParse({ email, password, mirror: site, remember });
     const next = parsed.success ? {} : fieldErrors(parsed.error);
     setErrors(next);
     if (next.email) document.getElementById('kmoe-email')?.focus();
@@ -82,8 +87,11 @@ function LoginForm({ account, mirror }: { account: KmoeAccount; mirror: string }
           <FieldLabel htmlFor="kmoe-mirror">镜像</FieldLabel>
           <MirrorSelect id="kmoe-mirror" value={site} onChange={setSite} />
         </Field>
+        <label className="flex items-center gap-2.5 text-sm"><Checkbox checked={remember} onCheckedChange={value => setRemember(value === true)} />记住密码，登录失效时自动重新登录</label>
         <p id="kmoe-password-hint" className="flex items-start gap-2 rounded-xl bg-muted/50 px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
-          <ShieldCheck className="mt-px size-3.5 shrink-0" />密码只用于这一次登录，不会保存；服务器只保存加密后的登录会话。
+          <ShieldCheck className="mt-px size-3.5 shrink-0" />{remember
+            ? '密码加密保存在这台 NAS 上，只用来在登录失效后自动重新登录；Kmoe 拒绝时会删除它并通知你，退出登录也会删除。'
+            : '密码只用于这一次登录，不会保存；服务器只保存加密后的登录会话。'}
         </p>
       </div>
       <CardFooter className="justify-end px-5 py-3.5 sm:px-6">
@@ -156,6 +164,60 @@ function AccountCard({ account, reserveMB }: { account: KmoeAccount; reserveMB: 
   </Card>;
 }
 
+/** 自动重新登录: turning it on asks for the password once (a login checks it), turning it off deletes the saved one. */
+function AutoLoginRow({ account }: { account: KmoeAccount }) {
+  const setAccount = useSetAccount();
+  const [asking, setAsking] = useState(false);
+  const forget = useMutation({
+    mutationFn: () => request('DELETE /api/kmoe/password'),
+    onSuccess: kmoe => { setAccount(kmoe); toast.success('已关闭自动重新登录', { description: '保存的密码已删除。' }); },
+  });
+  return <>
+    <SettingRow label="自动重新登录" htmlFor="kmoe-auto-login" description="登录失效时，用加密保存在这台 NAS 上的密码重新登录。Kmoe 拒绝时会删除密码并通知你。">
+      <Switch id="kmoe-auto-login" checked={account.remember} aria-disabled={forget.isPending || undefined}
+        onCheckedChange={on => { if (forget.isPending) return; if (on) setAsking(true); else forget.mutate(); }} />
+    </SettingRow>
+    {asking && <RememberDialog account={account} onClose={() => setAsking(false)} />}
+  </>;
+}
+
+function RememberDialog({ account, onClose }: { account: KmoeAccount; onClose: () => void }) {
+  const setAccount = useSetAccount();
+  const { open, close } = useClosable(onClose);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const login = useMutation({
+    mutationFn: () => request('POST /api/kmoe/login', { body: { email: account.email ?? '', password, mirror: account.mirror ?? undefined, remember: true } }),
+    onSuccess: kmoe => { setAccount(kmoe); toast.success('已开启自动重新登录'); close(); },
+    onError: failure => { setError(errorMessage(failure)); document.getElementById('remember-password')?.focus(); },
+  });
+  return <Dialog open={open} onOpenChange={next => { if (!next) close(); }}>
+    <DialogContent className="sm:max-w-md" onCloseAutoFocus={refocus(() => document.getElementById('kmoe-auto-login'))}>
+      <form noValidate className="flex flex-col gap-5" onSubmit={e => {
+        e.preventDefault();
+        if (password) { if (!login.isPending) login.mutate(); return; }
+        setError('请输入密码');
+        document.getElementById('remember-password')?.focus();
+      }}>
+        <DialogHeader>
+          <DialogTitle>开启自动重新登录</DialogTitle>
+          <DialogDescription>输入 {account.email} 的 Kmoe 密码。会先用它登录一次确认没有输错，再加密保存在这台 NAS 上。</DialogDescription>
+        </DialogHeader>
+        <Field className="gap-2">
+          <FieldLabel htmlFor="remember-password">密码</FieldLabel>
+          <PasswordInput id="remember-password" autoComplete="current-password" autoFocus value={password} onChange={e => setPassword(e.target.value)}
+            aria-invalid={!!error} aria-describedby={error ? 'remember-password-error' : undefined} />
+          <FieldMessage id="remember-password-error">{error ?? undefined}</FieldMessage>
+        </Field>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={close}>取消</Button>
+          <Button type="submit" aria-disabled={login.isPending}>{login.isPending && <LoaderCircle data-icon="inline-start" className="animate-spin" />}开启</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
+}
+
 export function AccountSection() {
   const { data: status } = useQuery(statusQuery);
   const settings = useQuery(settingsQuery);
@@ -164,10 +226,13 @@ export function AccountSection() {
   const account = status.kmoe;
   return <>
     {account.state === 'active' ? <AccountCard account={account} reserveMB={settings.data.quotaReserveMB} /> : <LoginForm account={account} mirror={settings.data.preferredMirror} />}
-    {account.state === 'active' && <Card className="gap-0 py-0">
-      <SettingRow label="镜像" htmlFor="preferred-mirror" description="访问 Kmoe 使用的域名。某个镜像连不上时，换一个试试。">
-        <MirrorSelect id="preferred-mirror" value={settings.data.preferredMirror} onChange={mirror => patch.mutate({ preferredMirror: mirror }, { onSuccess: () => void toast.success(`已切换到 ${mirror}`) })} />
+    {account.state === 'active' && <Card className="gap-0 divide-y py-0">
+      <SettingRow label="镜像" htmlFor="preferred-mirror" description="访问 Kmoe 使用的域名，连不上时换一个试试。切换时带上现在的登录，新镜像不认就保持不变。">
+        {/* The mirror the session uses; while a switch is being checked, the one it goes to. */}
+        <MirrorSelect id="preferred-mirror" value={(patch.isPending && patch.variables?.preferredMirror) || account.mirror || settings.data.preferredMirror} busy={patch.isPending}
+          onChange={mirror => patch.mutate({ preferredMirror: mirror }, { onSuccess: () => void toast.success(`已切换到 ${mirror}`, { description: '登录状态一起带过去了，不用重新登录。' }) })} />
       </SettingRow>
+      <AutoLoginRow account={account} />
     </Card>}
   </>;
 }

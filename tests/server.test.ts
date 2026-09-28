@@ -16,13 +16,22 @@ const root = mkdtempSync(join(tmpdir(), 'kmoesync-'));
 const library = join(root, 'library');
 /** Bun error codes the next requests to the fake Kmoe fail with, one per request. */
 const drops: string[] = [];
+/** Two more mirrors: mirror-b is the same fake Kmoe (a login carries over), mirror-c another one (it does not). */
+const other = startFakeKmoe({ port: 0 });
+const MIRRORS: Record<string, string> = { 'http://mirror-b.test': fake.origin, 'http://mirror-c.test': other.origin };
+/** Hosts the app sent requests to, for the tests that check where they went. */
+const hosts: string[] = [];
 const flaky = ((input: string | URL | Request, init?: RequestInit) => {
-  const code = String(input instanceof Request ? input.url : input).startsWith(fake.origin) ? drops.shift() : undefined;
-  return code ? Promise.reject(Object.assign(new Error(`connection failed (${code})`), { code })) : fetch(input, init);
+  const url = String(input instanceof Request ? input.url : input);
+  hosts.push(new URL(url).host);
+  const code = url.startsWith(fake.origin) ? drops.shift() : undefined;
+  if (code) return Promise.reject(Object.assign(new Error(`connection failed (${code})`), { code }));
+  const mirror = Object.keys(MIRRORS).find(from => url.startsWith(from));
+  return fetch(mirror ? MIRRORS[mirror] + url.slice(mirror.length) : input, init);
 }) as typeof fetch;
 const app = createApp({
   host: '127.0.0.1', port: 0, dataDir: join(root, 'data'), libraryRoot: library, staticDir: join(root, 'web'),
-  mirrors: [fake.origin], secureCookies: false, secret: Buffer.alloc(32, 7), fakeKmoe: true,
+  mirrors: [fake.origin, ...Object.keys(MIRRORS)], secureCookies: false, secret: Buffer.alloc(32, 7), fakeKmoe: true,
 }, { fetch: flaky, scheduler: false });
 let base = '';
 let cookie = '', csrf = '';
@@ -52,7 +61,7 @@ const tasksOf = async (comicKey: string) => (await api<{ tasks: Task[] }>('GET',
 const settled = (tasks: Task[]) => tasks.length > 0 && tasks.every(task => task.status !== 'queued' && task.status !== 'running');
 
 beforeAll(() => { base = `http://127.0.0.1:${app.start().port}`; });
-afterAll(async () => { await app.stop(); fake.stop(); dav.stop(); rmSync(root, { recursive: true, force: true }); });
+afterAll(async () => { await app.stop(); fake.stop(); other.stop(); dav.stop(); rmSync(root, { recursive: true, force: true }); });
 
 describe('admin auth', () => {
   test('setup, session and CSRF', async () => {
@@ -91,6 +100,69 @@ describe('kmoe + downloads', () => {
     expect((await api('PATCH', '/api/settings', { proxy: ' 192.0.2.1:9/ ', proxyKmoe: true })).data).toMatchObject({ proxy: 'http://192.0.2.1:9', proxyKmoe: true });
     expect((await api('GET', `/api/search?q=${encodeURIComponent('芙莉蓮')}`)).data.results).toHaveLength(1);
     expect((await api('PATCH', '/api/settings', { proxy: '', proxyKmoe: false })).data).toMatchObject({ proxy: '', proxyKmoe: false });
+  });
+
+  test('the mirror setting takes the Kmoe login along, but only to a mirror that accepts it', async () => {
+    const account = async () => (await api('GET', '/api/status')).data.kmoe;
+    const home = new URL(fake.origin).host;
+    expect(await account()).toMatchObject({ state: 'active', mirror: home });
+    expect((await api('GET', '/api/settings')).data.preferredMirror).toBe(home);
+    // mirror-b knows the session: it moves, and Kmoe requests go there from now on.
+    expect((await api('PATCH', '/api/settings', { preferredMirror: 'mirror-b.test' })).status).toBe(200);
+    expect(await account()).toMatchObject({ state: 'active', mirror: 'mirror-b.test' });
+    hosts.length = 0;
+    expect((await api('GET', `/api/search?q=${encodeURIComponent('芙莉蓮')}`)).data.results).toHaveLength(1);
+    expect(hosts).toEqual(['mirror-b.test']);
+    // mirror-c does not: nothing changes, and the login stays valid where it was.
+    const refused = await api('PATCH', '/api/settings', { preferredMirror: 'mirror-c.test' });
+    expect(refused).toMatchObject({ status: 409, data: { error: { code: 'mirror_needs_login' } } });
+    expect(refused.data.error.message).toContain('mirror-c.test');
+    expect(await account()).toMatchObject({ state: 'active', mirror: 'mirror-b.test' });
+    expect((await api('GET', '/api/settings')).data.preferredMirror).toBe('mirror-b.test');
+    expect((await api('PATCH', '/api/settings', { preferredMirror: home })).status).toBe(200);
+    expect((await account()).mirror).toBe(home);
+  });
+
+  test('a remembered password logs in again by itself when the session expires; a login Kmoe refuses forgets it', async () => {
+    const account = async () => (await api('GET', '/api/status')).data.kmoe;
+    const latest = async () => (await api('GET', '/api/activity')).data[0].title;
+    expect((await api('POST', '/api/kmoe/login', { email: 'reader@example.com', password: FAKE_PASSWORD, remember: true })).data).toMatchObject({ state: 'active', remember: true });
+    // The session dies: the next account check notices, downloads wait, and the scheduler's step logs in again.
+    await control({ expired: true });
+    expect((await api('POST', '/api/kmoe/refresh')).status).toBe(409);
+    expect(await account()).toMatchObject({ state: 'expired', remember: true });
+    expect((await api('GET', '/api/status')).data.queue).toMatchObject({ paused: true, reason: 'auth' });
+    expect(await latest()).toBe('Kmoe 登录已失效，正在自动重新登录');
+    await app.autoLogin();
+    expect(await account()).toMatchObject({ state: 'active', remember: true, error: null });
+    expect((await api('GET', '/api/status')).data.queue.paused).toBe(false);
+    expect(await latest()).toBe('已自动重新登录 Kmoe，下载继续');
+    // Kmoe refuses the next automatic login (it wants a person): the password is deleted and never tried again.
+    await control({ expired: true, loginCode: 'e401' });
+    await api('POST', '/api/kmoe/refresh');
+    await app.autoLogin();
+    expect(await account()).toMatchObject({ state: 'expired', remember: true, error: expect.stringContaining('自动重新登录失败') });
+    expect(await latest()).toBe('Kmoe 自动重新登录失败，下载已暂停');
+    expect(await app.kmoe.autoLogin()).toBeNull();
+    // Logging in by hand keeps the choice (the password is saved again); turning it off deletes the password.
+    await control({ loginCode: '' });
+    expect((await api('POST', '/api/kmoe/login', { email: 'reader@example.com', password: FAKE_PASSWORD })).data).toMatchObject({ state: 'active', remember: true });
+    expect(app.kmoe.autoLoginReady()).toBe(true);
+    expect((await api('DELETE', '/api/kmoe/password')).data).toMatchObject({ state: 'active', remember: false });
+    expect(app.kmoe.autoLoginReady()).toBe(false);
+  });
+
+  test('an automatic login that does not get through waits and tries again', async () => {
+    expect((await api('POST', '/api/kmoe/login', { email: 'reader@example.com', password: FAKE_PASSWORD, remember: true })).data.remember).toBe(true);
+    await control({ expired: true });
+    await api('POST', '/api/kmoe/refresh');
+    drops.push('ConnectionRefused');
+    expect(await app.kmoe.autoLogin()).toMatchObject({ outcome: 'retry', first: true, message: expect.stringContaining('连接被拒绝') });
+    expect(app.kmoe.autoLoginReady()).toBe(true);
+    // Not yet due: nothing is sent.
+    expect(await app.kmoe.autoLogin()).toBeNull();
+    await api('POST', '/api/kmoe/login', { email: 'reader@example.com', password: FAKE_PASSWORD, remember: false });
+    expect((await api('GET', '/api/status')).data.kmoe).toMatchObject({ state: 'active', remember: false });
   });
 
   test('comic detail with item states and a cached cover', async () => {

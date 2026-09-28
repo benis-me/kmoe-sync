@@ -1,16 +1,24 @@
-// The single Kmoe account: login, encrypted session cookies, quota, and expiry handling.
+// The single Kmoe account: login, encrypted session cookies, quota, expiry handling, and (when asked) logging in again by itself.
 import type { KmoeAccount, Quota } from '@shared/model';
 import { now, json, type DB } from '../db';
+import { AppError } from '../http/errors';
 import type { Sealer } from '../lib/crypto';
 import { KmoeClient, kmoeThrottle, type Cookies } from '../kmoe/client';
 import { proxied } from '../lib/proxy';
 import { KmoeError } from '../kmoe/errors';
+import { errorMessage, isRetryable } from '../lib/retry';
 import type { AccountInfo } from '../kmoe/parser';
 import { KmoeSite } from '../kmoe/site';
 
-interface Row { email: string | null; mirror: string | null; cookies: Uint8Array | null; state: KmoeAccount['state']; level: number | null; vip: number | null; free_quota: string | null; vip_quota: string | null; checked_at: string | null; error: string | null }
+interface Row { email: string | null; mirror: string | null; cookies: Uint8Array | null; state: KmoeAccount['state']; level: number | null; vip: number | null; free_quota: string | null; vip_quota: string | null; checked_at: string | null; error: string | null; password: Uint8Array | null; remember: number }
 
-export interface KmoeHooks { expired(message: string): void; restored(): void }
+/** `auto`: the session came back by itself, with the remembered password. */
+export interface KmoeHooks { expired(message: string): void; restored(auto: boolean): void }
+/** What an automatic login did: `retry` it later (Kmoe did not answer it), or it `failed` for good (Kmoe refused it). */
+export type AutoLogin = { outcome: 'ok' } | { outcome: 'retry'; message: string; first: boolean } | { outcome: 'failed'; message: string };
+
+/** Wait after an automatic login that did not get through, doubling each time up to the maximum. */
+const AUTO_RETRY_MS = 5 * 60_000, AUTO_RETRY_MAX_MS = 2 * 3_600_000;
 
 const remaining = (quota: Quota | null) => quota?.totalMB != null && quota.usedMB != null ? Math.max(0, quota.totalMB - quota.usedMB) : null;
 
@@ -18,6 +26,8 @@ export class KmoeService {
   /** MB spent since the last profile refresh, so the quota guard sees downloads before the next refresh. */
   private spentSinceRefresh = 0;
   private hooks: KmoeHooks = { expired() {}, restored() {} };
+  /** Automatic logins in a row that did not get through, and when the next one may go. */
+  private autoRetry = { failures: 0, at: 0 };
   /** fetch for Kmoe pages, covers and downloads: through the proxy only when the settings send Kmoe there too. */
   readonly net: typeof fetch;
 
@@ -31,7 +41,7 @@ export class KmoeService {
 
   get trustedHosts(): string[] { return this.mirrors.map(origin => new URL(origin).hostname); }
 
-  private row(): Row { return this.db.query<Row, []>('SELECT email, mirror, cookies, state, level, vip, free_quota, vip_quota, checked_at, error FROM kmoe_account WHERE id = 1').get()!; }
+  private row(): Row { return this.db.query<Row, []>('SELECT email, mirror, cookies, state, level, vip, free_quota, vip_quota, checked_at, error, password, remember FROM kmoe_account WHERE id = 1').get()!; }
 
   account(): KmoeAccount {
     let row = this.row();
@@ -47,6 +57,7 @@ export class KmoeService {
       remainingMB: parts.length ? Math.max(0, parts.reduce((sum, value) => sum + value, 0) - this.spentSinceRefresh) : null,
       checkedAt: row.checked_at, error: row.error,
       throttledUntil: ((cooldown) => cooldown ? new Date(cooldown.until).toISOString() : null)(kmoeThrottle()),
+      remember: row.remember === 1,
     };
   }
 
@@ -110,12 +121,73 @@ export class KmoeService {
     });
   }
 
-  async login(email: string, password: string, mirror?: string): Promise<KmoeAccount> {
+  /** `remember`: keep the password, sealed like the session, to log in again by itself later; left out, the last choice stands. */
+  async login(email: string, password: string, mirror?: string, remember?: boolean): Promise<KmoeAccount> {
     const site = new KmoeSite(this.client(this.origin(mirror)), this.trustedHosts);
     const info = await site.login(email, password);
     this.saveAccount(info, site, email);
-    this.hooks.restored();
+    const keep = remember ?? this.row().remember === 1;
+    this.db.run('UPDATE kmoe_account SET password = ?, remember = ? WHERE id = 1', [keep ? this.sealer.seal(password) : null, keep ? 1 : 0]);
+    this.autoRetry = { failures: 0, at: 0 };
+    this.hooks.restored(false);
     return this.account();
+  }
+
+  /** An expired session can come back by itself: the user asked for it and the password is still there (and readable). */
+  autoLoginReady(): boolean {
+    const row = this.row();
+    return row.remember === 1 && !!row.email && !!row.mirror && this.sealer.open(row.password) !== null;
+  }
+
+  /**
+   * Logs in again with the remembered password after the session expired, on the mirror it was using. A login Kmoe refuses
+   * (wrong password, disabled account, a challenge…) forgets the password and is never repeated; one that did not get
+   * through (network, throttling) waits 5, 10, 20… minutes. Null: nothing to do right now.
+   */
+  async autoLogin(): Promise<AutoLogin | null> {
+    const row = this.row();
+    if (row.state !== 'expired' || !this.autoLoginReady() || Date.now() < this.autoRetry.at || kmoeThrottle()) return null;
+    const site = new KmoeSite(this.client(row.mirror!), this.trustedHosts);
+    try {
+      this.saveAccount(await site.login(row.email!, this.sealer.open(row.password)!), site);
+    } catch (error) {
+      const message = errorMessage(error);
+      if (isRetryable(error)) {
+        const failures = this.autoRetry.failures + 1;
+        this.autoRetry = { failures, at: Date.now() + Math.min(AUTO_RETRY_MAX_MS, AUTO_RETRY_MS * 2 ** (failures - 1)) };
+        return { outcome: 'retry', message, first: failures === 1 };
+      }
+      this.autoRetry = { failures: 0, at: 0 };
+      this.db.run('UPDATE kmoe_account SET password = NULL, error = ?, updated_at = ? WHERE id = 1', [`自动重新登录失败：${message}`, now()]);
+      return { outcome: 'failed', message };
+    }
+    this.autoRetry = { failures: 0, at: 0 };
+    this.hooks.restored(true);
+    return { outcome: 'ok' };
+  }
+
+  /** No more logging in by itself: the remembered password is deleted. */
+  forgetPassword(): KmoeAccount {
+    this.db.run('UPDATE kmoe_account SET password = NULL, remember = 0, updated_at = ? WHERE id = 1', [now()]);
+    return this.account();
+  }
+
+  /**
+   * Moves the logged-in session to another mirror (the mirror setting). Its cookies are tried there once, on the profile
+   * page, before anything changes: a mirror that does not accept them leaves the session where it was.
+   */
+  async moveSession(mirror: string): Promise<void> {
+    const row = this.row(), origin = this.origin(mirror);
+    if (row.state !== 'active' || row.mirror === origin) return;
+    const site = new KmoeSite(this.client(origin, this.site().client.cookieJar()), this.trustedHosts);
+    let info: AccountInfo;
+    try { info = await site.account(); } catch (error) {
+      if (error instanceof KmoeError && error.code === 'login_required') {
+        throw new AppError(409, 'mirror_needs_login', `${new URL(origin).host} 不认现在的登录，没有切换。要用这个镜像，请退出后在它上面重新登录`);
+      }
+      throw error;
+    }
+    this.saveAccount(info, site);
   }
 
   /** Re-validates the session and refreshes quota. */
@@ -133,7 +205,7 @@ export class KmoeService {
   }
 
   logout(): KmoeAccount {
-    this.db.run("UPDATE kmoe_account SET cookies = NULL, state = 'none', level = NULL, vip = NULL, free_quota = NULL, vip_quota = NULL, checked_at = NULL, error = NULL, updated_at = ? WHERE id = 1", [now()]);
+    this.db.run("UPDATE kmoe_account SET cookies = NULL, password = NULL, remember = 0, state = 'none', level = NULL, vip = NULL, free_quota = NULL, vip_quota = NULL, checked_at = NULL, error = NULL, updated_at = ? WHERE id = 1", [now()]);
     return this.account();
   }
 

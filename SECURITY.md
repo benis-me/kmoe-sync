@@ -20,5 +20,5 @@
 - Kmoe Sync 为**单管理员、局域网内使用**设计。请不要把端口直接暴露到公网；需要远程访问时，请放在 HTTPS 反向代理或 VPN 后面，
   并设置 `KMOESYNC_SECURE_COOKIES=1`。
 - 部署后请立即设置管理员密码：在此之前，能访问端口的人都可以抢先设置。忘记密码时用 `kmoesync --reset-admin` 重置。
-- Kmoe 会话、WebDAV 密码、Komga 凭据和 AI 的 API Key 用 `data/secret.key`（或 `KMOESYNC_SECRET`）加密保存；请妥善备份并保护 `data/` 目录。
+- Kmoe 会话（以及勾选「记住密码」时的 Kmoe 密码）、WebDAV 密码、Komga 凭据和 AI 的 API Key 用 `data/secret.key`（或 `KMOESYNC_SECRET`）加密保存；请妥善备份并保护 `data/` 目录。
 - REST API 与 MCP 使用单独生成的令牌，只能操作漫画、订阅和下载；不需要时请在「设置 → API 与 MCP」撤销。

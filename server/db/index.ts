@@ -96,6 +96,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE folder_metadata ADD COLUMN bangumi_ai TEXT;
   ALTER TABLE folder_metadata ADD COLUMN ai_polish TEXT;
   `,
+  // v4: the Kmoe password (sealed) for logging in again by itself when the session expires, and whether the user wants that.
+  `
+  ALTER TABLE kmoe_account ADD COLUMN password BLOB;
+  ALTER TABLE kmoe_account ADD COLUMN remember INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export type DB = Database;

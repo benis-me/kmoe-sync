@@ -456,6 +456,8 @@ export const KmoeAccount = z.object({
   error: Nullable(z.string()),
   /** Kmoe is limiting this service's request rate (it redirects to a search engine); all Kmoe requests pause until then. */
   throttledUntil: Nullable(Timestamp),
+  /** The user wants the password kept (sealed) to log in again by itself when the session expires. */
+  remember: z.boolean(),
 });
 export type KmoeAccount = z.infer<typeof KmoeAccount>;
 

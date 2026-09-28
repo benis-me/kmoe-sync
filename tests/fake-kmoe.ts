@@ -37,6 +37,8 @@ interface Control {
   expired: boolean;
   /** Answer the next N searches the way Kmoe deflects clients it throttles: a redirect to www.google.com. */
   deflect: number;
+  /** Answer logins with this msgid instead (e.g. e401: Kmoe refuses an automated login). */
+  loginCode: string;
 }
 
 /** A minimal but valid EPUB (ZIP with a stored mimetype entry) padded to `size` bytes. */
@@ -63,7 +65,7 @@ const page = (title: string, body: string, script = '') =>
 
 export function startFakeKmoe(options: { port?: number; hostname?: string; fileScale?: number } = {}) {
   const comics = catalog();
-  const control: Control = { dropDownloads: 0, quotaExhausted: false, rate: 0, expired: false, deflect: 0 };
+  const control: Control = { dropDownloads: 0, quotaExhausted: false, rate: 0, expired: false, deflect: 0, loginCode: '' };
   let searches = 0;
   const sessions = new Map<string, { email: string | null }>();
   const hashes = new Map<string, string>();
@@ -107,6 +109,7 @@ export function startFakeKmoe(options: { port?: number; hostname?: string; fileS
       if (path === '/login.php') return html(page('登錄', '<form action="/login_do.php" method="post" name="login"><input name="email"><input name="passwd"></form>', "kb_http_post( '/login_act.php', oData, cb_login );"));
       if (path === '/login_act.php' && req.method === 'POST') {
         const form = await req.formData();
+        if (control.loginCode) return Response.json({ msgid: control.loginCode });
         if (form.get('passwd') !== FAKE_PASSWORD) return Response.json({ msgid: 'e400', msg: '帳號或密碼錯誤' });
         control.expired = false;
         return Response.json({ msgid: 'm100' }, { headers: { 'Set-Cookie': cookie(newSession(String(form.get('email')))) } });

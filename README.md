@@ -131,7 +131,7 @@ docker compose up -d
 然后打开 `http://<NAS 地址>:5663`：
 
 1. **设置管理员密码**。请部署后立刻设置：在此之前，能访问这个端口的人都可以抢先设置。
-2. **设置 → Kmoe 账号**：登录 Kmoe（密码只用于这一次登录，不会保存）。
+2. **设置 → Kmoe 账号**：登录 Kmoe。密码默认只用于这一次登录、不会保存；勾选「记住密码」后，登录失效时会自动重新登录。
 3. **设置 → 存储位置**：默认已有指向 `/library` 的「本地书库」，也可以添加 WebDAV。
 4. 去 **发现** 搜索漫画，订阅或挑选要下载的卷；已有的漫画在 **书库整理** 里扫描导入。
 
@@ -170,7 +170,7 @@ NAS 连不上镜像仓库时，可以在电脑上打包，让 NAS 从局域网�
 | `DATA_DIR` | `/data` | 数据目录 |
 | `LIBRARY_ROOT` | `/library` | 本地书库根目录；本地存储位置都在它之下 |
 | `PUID` / `PGID` / `UMASK` | 空 | 以指定用户运行，写入的文件归该用户所有 |
-| `KMOESYNC_SECRET` | 自动生成 | 加密 Kmoe 会话、WebDAV 密码和 API Key 的密钥（≥32 字符）；不设置时生成在 `data/secret.key` |
+| `KMOESYNC_SECRET` | 自动生成 | 加密 Kmoe 会话（及记住的 Kmoe 密码）、WebDAV 密码和 API Key 的密钥（≥32 字符）；不设置时生成在 `data/secret.key` |
 | `KMOESYNC_SECURE_COOKIES` | 关 | 设为 `1` 时登录 Cookie 带 `Secure`（在 HTTPS 反向代理后面使用） |
 | `KMOESYNC_MIRRORS` | 官方镜像 | 逗号分隔的镜像域名，覆盖内置列表 |
 | `STATIC_DIR` | `/app/web` | 网页文件目录（镜像内已包含） |
@@ -187,7 +187,7 @@ NAS 连不上镜像仓库时，可以在电脑上打包，让 NAS 从局域网�
 2. 后台每分钟把需要同步的文件夹写入 Komga：系列信息（标题、简介、标签、状态……）和每一卷的信息（卷号、发售日、ISBN）。
 3. 新下载的文件要等 Komga 扫描后才会出现在 Komga 里。Kmoe Sync 会请求 Komga 扫描书库，并在 2、5、15、60 分钟后回来补写这些卷。
 
-没能自动匹配的系列会出现在书库整理的「Bangumi 待确认」里，选定条目后同样会自动同步。
+没能自动匹配的系列会出现在书库整理的「待处理」里（也可以按 Bangumi 筛选「待确认」「未找到」），选定条目后同样会自动同步。
 
 ### Bangumi 访问不了怎么办
 
@@ -211,7 +211,7 @@ NAS 连不上镜像仓库时，可以在电脑上打包，让 NAS 从局域网�
 ## 安全
 
 - 单管理员：argon2id 密码、HttpOnly 会话 Cookie、CSRF 令牌、登录失败逐次减速。
-- Kmoe 密码只用于登录那一次，保存的是加密后的会话 Cookie（AES-256-GCM）；WebDAV 密码、Komga 凭据和 AI 的 API Key 同样加密存储。
+- Kmoe 密码默认只用于登录那一次，保存的是加密后的会话 Cookie（AES-256-GCM）。勾选「记住密码」时密码同样加密保存，只用来在登录失效后自动重新登录：Kmoe 拒绝那次登录时自动删除，退出登录也会删除。密钥默认和数据一起放在 `data/` 里，打开这个选项时建议用 `KMOESYNC_SECRET` 把密钥放到别处。WebDAV 密码、Komga 凭据和 AI 的 API Key 同样加密存储。
 - 建议只在局域网或经 HTTPS 反向代理访问；REST API / MCP 需要单独生成的令牌，而且只能操作漫画、订阅和下载。
 - 发现安全问题请看 [SECURITY.md](SECURITY.md)，不要公开提 Issue。
 

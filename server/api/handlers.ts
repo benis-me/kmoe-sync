@@ -51,7 +51,9 @@ export function createHandlers(app: App): Handlers {
 
     // ---------- Kmoe account ----------
     'POST /api/kmoe/login': async ({ body }) => {
-      const account = await kmoe.login(body.email, body.password, body.mirror);
+      const account = await kmoe.login(body.email, body.password, body.mirror, body.remember);
+      // The mirror setting names the mirror in use: the one this login went to.
+      if (account.mirror) settings.patch({ preferredMirror: account.mirror });
       activity.add({ kind: 'info', level: 'success', title: `已登录 Kmoe（${account.email}）` });
       app.emitStatus();
       return account;
@@ -63,6 +65,7 @@ export function createHandlers(app: App): Handlers {
       return account;
     },
     'POST /api/kmoe/logout': () => { const account = kmoe.logout(); app.emitStatus(); return account; },
+    'DELETE /api/kmoe/password': () => { const account = kmoe.forgetPassword(); app.emitStatus(); return account; },
     'GET /api/kmoe/mirrors': () => config.mirrors.map(origin => new URL(origin).host),
 
     // ---------- Discover ----------
@@ -129,10 +132,12 @@ export function createHandlers(app: App): Handlers {
     // ---------- Settings ----------
     'GET /api/settings': () => settings.view(),
     'GET /api/about': () => app.about(),
-    'PATCH /api/settings': ({ body }) => {
+    'PATCH /api/settings': async ({ body }) => {
       if (body.defaultTargetId != null && !targets.exists(body.defaultTargetId)) throw new AppError(404, 'target_not_found', '找不到该存储位置');
       if (body.preferredMirror && !config.mirrors.some(origin => new URL(origin).host === body.preferredMirror)) throw new AppError(400, 'invalid_mirror', '不支持的镜像站');
       if (body.notifications && new Set(body.notifications.map(channel => channel.id)).size !== body.notifications.length) throw new AppError(400, 'duplicate_channel', '通知渠道编号重复');
+      // A logged-in session moves along, and only to a mirror that accepts it; otherwise nothing is saved.
+      if (body.preferredMirror) await kmoe.moveSession(body.preferredMirror);
       const proxy = settings.get().proxy;
       settings.patch(body.proxy === undefined ? body : { ...body, proxy: proxyUrl(body.proxy) });
       if (settings.get().proxy !== proxy) metadata.networkChanged();

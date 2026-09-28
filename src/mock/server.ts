@@ -817,7 +817,7 @@ export function createMockServer(scenario: Scenario) {
   // ---------- endpoints ----------
   const authState = () => ({ setupRequired: db.auth.setupRequired, authenticated: db.auth.authenticated, csrf: db.auth.authenticated ? db.auth.csrf : null });
   const settings = () => ({ ...db.settings, apiToken: !!db.token });
-  const noKmoe = () => ({ state: 'none' as const, email: null, mirror: null, level: null, vip: null, free: null, vipQuota: null, remainingMB: null, checkedAt: null, error: null, throttledUntil: null });
+  const noKmoe = () => ({ state: 'none' as const, email: null, mirror: null, level: null, vip: null, free: null, vipQuota: null, remainingMB: null, checkedAt: null, error: null, throttledUntil: null, remember: false });
   const subscriptionOf = (key: string) => {
     const sub = db.subscriptions.get(key);
     if (!sub) throw new Fail(404, 'not_found', '这部漫画还没有订阅');
@@ -857,8 +857,9 @@ export function createMockServer(scenario: Scenario) {
       const keep = db.kmoe.email === body.email ? db.kmoe : null;
       db.kmoe = {
         state: 'active', email: body.email, mirror: body.mirror ?? db.settings.preferredMirror, level: keep?.level ?? 2, vip: keep?.vip ?? false,
-        free: keep?.free ?? { totalMB: 1024, usedMB: 0, resetDay: 1 }, vipQuota: keep?.vipQuota ?? null, remainingMB: keep?.remainingMB ?? 1024, checkedAt: iso(), error: null, throttledUntil: null,
+        free: keep?.free ?? { totalMB: 1024, usedMB: 0, resetDay: 1 }, vipQuota: keep?.vipQuota ?? null, remainingMB: keep?.remainingMB ?? 1024, checkedAt: iso(), error: null, throttledUntil: null, remember: body.remember ?? db.kmoe.remember,
       };
+      if (db.kmoe.mirror) db.settings.preferredMirror = db.kmoe.mirror;
       if (restored) log('session_restored', 'success', 'Kmoe 登录已恢复', null);
       if (db.queue.reason === 'auth') resume('重新登录 Kmoe 后自动继续');
       emitStatus();
@@ -871,6 +872,7 @@ export function createMockServer(scenario: Scenario) {
       return db.kmoe;
     },
     'POST /api/kmoe/logout': () => { db.kmoe = noKmoe(); emitStatus(); return db.kmoe; },
+    'DELETE /api/kmoe/password': () => { db.kmoe = { ...db.kmoe, remember: false }; emitStatus(); return db.kmoe; },
     'GET /api/kmoe/mirrors': () => MIRRORS,
 
     'GET /api/search': ({ query }) => {
@@ -1114,6 +1116,8 @@ export function createMockServer(scenario: Scenario) {
         if (proxy !== db.settings.proxy) db.metadata.bangumi.online = { reachable: null, checkedAt: null, error: null };
         body = { ...body, proxy };
       }
+      // Like the server: the logged-in session moves to the chosen mirror (every demo mirror accepts it).
+      if (body.preferredMirror && db.kmoe.state === 'active') db.kmoe = { ...db.kmoe, mirror: body.preferredMirror };
       Object.assign(db.settings, body);
       const remaining = db.kmoe.remainingMB;
       if (db.queue.reason === 'quota' && remaining !== null && remaining >= db.settings.quotaReserveMB) resume('保留额度已调低');

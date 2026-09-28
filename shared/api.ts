@@ -39,9 +39,12 @@ export const endpoints = {
   'GET /api/status': { res: Status },
 
   // Kmoe account. The password is used once and never stored; only the encrypted session is kept.
-  'POST /api/kmoe/login': { body: z.object({ email: z.string().trim().email('请输入邮箱'), password: z.string().min(1).max(200), mirror: z.string().optional() }), res: KmoeAccount },
+  /** `remember`: keep the password (sealed) to log in again by itself when the session expires; left out, the last choice stands. */
+  'POST /api/kmoe/login': { body: z.object({ email: z.string().trim().email('请输入邮箱'), password: z.string().min(1).max(200), mirror: z.string().optional(), remember: z.boolean().optional() }), res: KmoeAccount },
   'POST /api/kmoe/refresh': { res: KmoeAccount },
   'POST /api/kmoe/logout': { res: KmoeAccount },
+  /** Forgets the remembered password: no more logging in by itself. */
+  'DELETE /api/kmoe/password': { res: KmoeAccount },
   'GET /api/kmoe/mirrors': { res: z.array(z.string()) },
 
   // Discover.
