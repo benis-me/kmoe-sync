@@ -2,7 +2,7 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.1.3] - 2026-09-29
 
 ### 新增
 
@@ -55,6 +55,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.1.3]: https://github.com/benis-me/kmoe-sync/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/benis-me/kmoe-sync/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/benis-me/kmoe-sync/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/benis-me/kmoe-sync/releases/tag/v0.1.0
