@@ -80,7 +80,7 @@ export function SettingsSectionPage() {
   const Content = meta.content;
   return <motion.section key={meta.id} aria-labelledby="section-title" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
     className="flex min-w-0 flex-col gap-6">
-    <h2 id="section-title" className="text-[22px] leading-tight font-semibold tracking-tight">{meta.title}</h2>
+    <h2 id="section-title" className="text-[22px] leading-tight md:text-[26px] font-semibold tracking-tight">{meta.title}</h2>
     <Content />
   </motion.section>;
 }

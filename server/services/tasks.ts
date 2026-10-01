@@ -119,11 +119,23 @@ export class TaskService {
   }
 
   /** Cancels queued tasks (not running ones) matching a filter; used by subscription changes. */
-  cancelQueued(ids: number[]) {
+  cancelQueued(ids: number[]): number {
+    let cancelled = 0;
     for (const id of ids) {
       const result = this.db.run("UPDATE tasks SET status = 'cancelled', phase = NULL, retry_at = NULL, finished_at = ? WHERE id = ? AND status = 'queued'", [now(), id]);
-      if (result.changes) this.emit(id, false);
+      if (result.changes) { cancelled++; this.emit(id, false); }
     }
+    return cancelled;
+  }
+
+  /** Everything still waiting (wrong format or place chosen, say); running tasks finish. */
+  cancelAllQueued(): number {
+    const rows = this.db.query<{ id: number; key: string }, []>("SELECT t.id, c.key FROM tasks t JOIN comics c ON c.id = t.comic_id WHERE t.status = 'queued'").all();
+    const cancelled = this.cancelQueued(rows.map(row => row.id));
+    for (const key of new Set(rows.map(row => row.key))) this.hub.emit({ type: 'comic', key });
+    this.hub.emit({ type: 'shelf' });
+    this.onChange();
+    return cancelled;
   }
 
   retry(id: number) {

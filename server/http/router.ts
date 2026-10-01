@@ -29,7 +29,7 @@ export const TOKEN_ENDPOINTS = new Set<EndpointKey>([
   'GET /api/status', 'GET /api/search', 'POST /api/resolve', 'GET /api/comics/:key', 'POST /api/comics/:key/refresh',
   'POST /api/comics/:key/library-check', 'PUT /api/comics/:key/subscription', 'POST /api/comics/:key/subscription/preview',
   'DELETE /api/comics/:key/subscription', 'POST /api/comics/:key/check', 'GET /api/shelf', 'POST /api/checks/run',
-  'GET /api/tasks', 'POST /api/tasks', 'POST /api/tasks/:id/cancel', 'POST /api/tasks/:id/retry', 'POST /api/tasks/retry-failed',
+  'GET /api/tasks', 'POST /api/tasks', 'POST /api/tasks/:id/cancel', 'POST /api/tasks/:id/retry', 'POST /api/tasks/retry-failed', 'POST /api/tasks/cancel-queued',
   'POST /api/queue/pause', 'POST /api/queue/resume', 'GET /api/targets', 'GET /api/activity', 'GET /api/sources', 'GET /api/sources/:id/items',
   'GET /api/library', 'POST /api/library/scan', 'POST /api/library/match-kmoe', 'POST /api/library/match-bangumi', 'POST /api/library/sync-komga',
   'POST /api/library/folders/:id/sync', 'GET /api/bangumi/search',

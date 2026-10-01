@@ -94,7 +94,6 @@ function SourceCard({ source, onDone }: { source: Source | null; onDone?: () => 
         <legend className="mb-2.5 text-sm font-medium">读取这些状态</legend>
         <div className="flex flex-wrap gap-1.5">
           {BangumiType.options.map(type => <Toggle key={type} variant="outline" size="sm" pressed={draft.types.includes(type)}
-            className="data-[state=on]:border-seal/45 data-[state=on]:bg-seal-soft data-[state=on]:text-seal"
             onPressedChange={on => set('types', on ? BangumiType.options.filter(t => t === type || draft.types.includes(t)) : draft.types.filter(t => t !== type))}>
             {BANGUMI_LABELS[type]}
           </Toggle>)}

@@ -51,7 +51,7 @@ export function RuleEditor({ id, value, onChange, base }: { id: string; value: s
     <div className="flex flex-col gap-2.5">
       <ChipRow label="常用">
         {PRESETS.map(([label, template]) => <Button key={label} type="button" variant="outline" size="xs" title={template} aria-pressed={value === template}
-          className="aria-pressed:border-seal/35 aria-pressed:bg-seal-soft aria-pressed:text-seal" onClick={() => onChange(template)}>{label}</Button>)}
+          className="aria-pressed:border-seal/45 aria-pressed:bg-seal-soft aria-pressed:text-seal" onClick={() => onChange(template)}>{label}</Button>)}
       </ChipRow>
       {TOKEN_GROUPS.map(group => <ChipRow key={group.label} label={group.label}>
         {group.tokens.map(([token, description]) => <Button key={token} type="button" variant="outline" size="xs" aria-label={`插入 ${token}（${description}）`}

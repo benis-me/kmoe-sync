@@ -3,7 +3,7 @@ import { Link, getRouteApi } from '@tanstack/react-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { CircleCheck, Compass, Download, LoaderCircle, Pause, RotateCcw, Trash2 } from 'lucide-react';
+import { Ban, CircleCheck, Compass, Download, LoaderCircle, Pause, RotateCcw, Trash2 } from 'lucide-react';
 import type { QueueCounts, TaskStatus } from '@shared/model';
 import { request } from '@/lib/api';
 import { useMediaQuery } from '@/lib/hooks';
@@ -48,6 +48,10 @@ export function DownloadsPage() {
     mutationFn: () => request('POST /api/tasks/retry-failed'),
     onSuccess: ({ retried }) => { toast.success(`已重新加入 ${retried} 个任务`); after(); },
   });
+  const cancelQueued = useMutation({
+    mutationFn: () => request('POST /api/tasks/cancel-queued'),
+    onSuccess: ({ cancelled }) => { toast.success(cancelled ? `已取消 ${cancelled} 个等待中的任务` : '没有等待中的任务'); after(); },
+  });
   const clearFinished = useMutation({
     mutationFn: () => request('POST /api/tasks/clear-finished'),
     onSuccess: ({ removed }) => { toast.success(removed ? `已清除 ${removed} 条记录` : '没有可清除的记录'); after(); },
@@ -66,6 +70,12 @@ export function DownloadsPage() {
       {!!counts?.failed && <Button variant={phone ? 'ghost' : 'outline'} size="sm" aria-disabled={retryFailed.isPending} onClick={() => { if (!retryFailed.isPending) retryFailed.mutate(); }}>
         <RotateCcw data-icon="inline-start" /><span className="max-md:sr-only">重试全部失败</span><span className="text-muted-foreground tabular-nums">{counts.failed}</span>
       </Button>}
+      {!!counts?.queued && <ConfirmAction title={`取消全部 ${counts.queued} 个等待中的任务？`} description="正在下载的会继续完成。订阅的卷取消后不会再自动补齐，可以在列表中重试。"
+        action="全部取消" cancel="保留" onConfirm={() => cancelQueued.mutate()}>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" aria-disabled={cancelQueued.isPending}>
+          <Ban data-icon="inline-start" /><span className="max-md:sr-only">取消全部等待</span><span className="tabular-nums">{counts.queued}</span>
+        </Button>
+      </ConfirmAction>}
       {!!counts?.completed && <ConfirmAction title="清除已完成的记录？" description="只清除列表里的记录，书库中的文件不受影响。" action="清除" onConfirm={() => clearFinished.mutate()}>
         <Button variant="ghost" size={phone ? 'icon-sm' : 'sm'} aria-label="清除已完成" className="text-muted-foreground"><Trash2 data-icon="inline-start" />{!phone && '清除已完成'}</Button>
       </ConfirmAction>}

@@ -18,6 +18,14 @@
           document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : media.matches ? 'dark' : 'light';
         }
         apply();
+        // The browser's bars follow the theme in use (the system's or the switch's), not only the system's.
+        var colors = { light: '#f6f3ee', dark: '#15161b' };
+        function bars() {
+          var color = colors[document.documentElement.dataset.theme] || colors.light;
+          document.querySelectorAll('meta[name=theme-color]').forEach(function (meta) { meta.content = color; });
+        }
+        bars();
+        new MutationObserver(bars).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
         // A system switch swaps in one frame too, like the sidebar switch: no color transition smears across the page.
         media.addEventListener('change', function () {
           var root = document.documentElement;

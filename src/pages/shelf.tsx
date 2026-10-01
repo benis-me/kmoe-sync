@@ -1,4 +1,4 @@
-// 书架: status strip, pause banner, first-run guide, the cover wall with filters, and recent activity.
+// 书架: status strip (phones), pause banner, first-run guide, the cover wall with filters, and recent activity.
 import { useMemo, useRef, useState } from 'react';
 import { Link, getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +17,7 @@ import { Page, PageHeader } from '@/components/app/page';
 import { QueueBanner } from '@/components/app/queue-banner';
 import { ActivityFeed } from '@/features/shelf/activity';
 import { ComicCard } from '@/features/shelf/comic-card';
-import { CheckAllButton, Onboarding, StatusStrip } from '@/features/shelf/overview';
+import { CheckAllButton, NextCheck, Onboarding, StatusStrip } from '@/features/shelf/overview';
 
 const route = getRouteApi('/_app/');
 type Filter = 'all' | 'tracking' | 'updates' | 'missing' | 'failed';
@@ -57,8 +57,10 @@ export function ShelfPage() {
   const todo = library?.todo ?? 0;
   const prominent = entries?.length === 0 || todo > 0 || !!library?.unscanned;
   return <Page width="wide">
-    <PageHeader title="书架" description={entries?.length ? `${entries.length} 部漫画 · 追更中 ${subscribed} 部` : '订阅或下载过的漫画都在这里。'}>
-      {!desktop && status && !!subscribed && <CheckAllButton status={status} subscribed={subscribed} variant="ghost" size="icon-sm" />}
+    <PageHeader title="书架" description={entries?.length
+      ? <>{entries.length} 部漫画 · 追更中 {subscribed} 部{desktop && status && !!subscribed && <NextCheck status={status} />}</>
+      : '订阅或下载过的漫画都在这里。'}>
+      {status && !!subscribed && <CheckAllButton status={status} subscribed={subscribed} variant="ghost" size="icon-sm" />}
       {/* Phones reach 书库 from the tab bar: the button only shows there when something waits. */}
       {entries && (prominent || desktop) && <Button variant={prominent ? 'default' : 'outline'} size="sm" asChild>
         <Link to="/library" aria-label={todo ? `导入已有漫画，${todo} 个文件夹待处理` : undefined}>
@@ -69,7 +71,7 @@ export function ShelfPage() {
     </PageHeader>
 
     {status && <QueueBanner status={status} reserveMB={reserve} />}
-    {status ? <StatusStrip status={status} reserveMB={reserve} subscribed={subscribed} /> : <Skeleton className="h-[72px] rounded-2xl max-sm:h-16" />}
+    {status ? <StatusStrip status={status} reserveMB={reserve} subscribed={subscribed} /> : <Skeleton className="h-[72px] rounded-2xl max-sm:h-16 md:hidden" />}
     {status && entries && !entries.length && <Onboarding status={status} />}
 
     {/* An empty shelf shows the guide above instead of a cover wall; the activity then runs full width. */}

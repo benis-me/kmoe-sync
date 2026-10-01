@@ -29,7 +29,7 @@ Authorization: Bearer kms_xxxxxxxx
 | POST | `/api/v1/checks/run` | 检查全部订阅 |
 | GET | `/api/v1/tasks?status=&comicKey=&cursor=&limit=` | 下载任务 |
 | POST | `/api/v1/tasks` `{"comicKey", "itemIds", "format", "targetId"}` | 下载指定卷 / 话 |
-| POST | `/api/v1/tasks/:id/cancel` · `/retry`，`/api/v1/tasks/retry-failed` | 任务操作 |
+| POST | `/api/v1/tasks/:id/cancel` · `/retry`，`/api/v1/tasks/retry-failed` · `/cancel-queued` | 任务操作 |
 | POST | `/api/v1/queue/pause` · `/api/v1/queue/resume` | 暂停 / 继续队列 |
 | GET | `/api/v1/targets` · `/api/v1/activity` · `/api/v1/sources` · `/api/v1/sources/:id/items` | 只读列表 |
 | GET | `/api/v1/library?targetId=` | 书库文件夹及其 Kmoe / Bangumi / Komga 状态、后台任务 |

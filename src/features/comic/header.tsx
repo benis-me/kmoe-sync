@@ -1,6 +1,6 @@
 import { useState, type RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, LoaderCircle, RefreshCw, Sparkles } from 'lucide-react';
+import { BellPlus, ExternalLink, LoaderCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from 'cn';
 import { followedTypes, type ComicDetail } from '@shared/model';
 import { fromNow } from '@/lib/format';
@@ -24,7 +24,6 @@ export function ComicHeader({ detail, kmoeUrl, refreshing, onRefresh, titleRef }
   const { data: aiReady = false } = useQuery({ ...aiSettingsQuery, select: settings => settings.ready });
   const askAi = useAssistant(state => state.show);
   return <header className="relative grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-4 sm:gap-x-6 md:gap-x-8 md:gap-y-3">
-    <div aria-hidden className="pointer-events-none absolute -top-10 -left-12 h-56 w-96 tone [mask-image:radial-gradient(ellipse_at_top_left,black_10%,transparent_65%)] max-md:hidden" />
     <Cover src={comic.cover} title={comic.title} className="relative w-24 rounded-xl shadow-float sm:w-32 md:row-span-3 md:w-40" />
     <div className="relative flex min-w-0 flex-col gap-3 self-center md:self-start md:pt-1">
       <div className="flex flex-col gap-1.5">
@@ -49,6 +48,8 @@ export function ComicHeader({ detail, kmoeUrl, refreshing, onRefresh, titleRef }
         className="mt-1 rounded-sm text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{expanded ? '收起' : '展开'}</button>}
     </div>}
     <div className="relative col-span-2 flex flex-wrap items-center gap-2 self-end md:col-span-1 md:col-start-2">
+      {/* Below xl the subscription card comes after the whole chapter grid. */}
+      {!subscription && <Button variant="outline" size="sm" className="xl:hidden" asChild><a href="#subscription"><BellPlus data-icon="inline-start" />订阅追更</a></Button>}
       <Button variant="outline" size="sm" asChild>
         <a href={kmoeUrl} target="_blank" rel="noreferrer"><ExternalLink data-icon="inline-start" />在 Kmoe 打开</a>
       </Button>

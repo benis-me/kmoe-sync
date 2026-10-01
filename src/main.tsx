@@ -5,12 +5,13 @@ import { RouterProvider } from '@tanstack/react-router';
 import { MotionConfig } from 'motion/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/app/toaster';
+// '@/mock' before '@/router': demo mode rewrites the URL (drops ?mock) when it is imported, before the router reads it.
 import { installMock } from '@/mock';
+import { queryClient, router } from '@/router';
 import '@/styles/app.css';
 
-// Demo mode rewrites the URL (drops ?mock), so it runs before the router reads the location.
+// Demo mode serves the API in the browser: in place before the first request.
 await installMock();
-const { queryClient, router } = await import('@/router');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

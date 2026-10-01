@@ -306,6 +306,17 @@ describe('kmoe + downloads', () => {
     }
   });
 
+  test('everything still waiting can be cancelled in one go', async () => {
+    await api('POST', '/api/queue/pause');
+    try {
+      expect((await api('POST', '/api/tasks', { comicKey: 'c9d0e1', itemIds: ['5003', '5004'], format: 'epub', targetId })).data).toMatchObject({ created: 2 });
+      const queued = (await api('GET', '/api/status')).data.queue.counts.queued as number;
+      expect((await api('POST', '/api/tasks/cancel-queued')).data).toEqual({ cancelled: queued });
+      expect((await api('GET', '/api/status')).data.queue.counts.queued).toBe(0);
+      expect((await tasksOf('c9d0e1')).filter(task => ['5003', '5004'].includes(task.itemId)).map(task => task.status)).toEqual(['cancelled', 'cancelled']);
+    } finally { await api('POST', '/api/queue/resume'); }
+  });
+
   test('scheduler: a batch of checks waiting on Kmoe does not hold up the tick, so a network pause still resumes', async () => {
     await app.tick(); // the first tick after a start also refreshes the Kmoe account
     let release = () => {};

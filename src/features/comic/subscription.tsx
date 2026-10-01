@@ -104,7 +104,7 @@ export function SubscriptionCard({ detail, targets, settings, vip, remainingMB }
             const count = detail.items.filter(item => item.type === type).length;
             const on = draft.types.includes(type);
             return <Toggle key={type} variant="outline" size="sm" pressed={on}
-              className="gap-1.5 px-2.5 data-[state=on]:border-seal/45 data-[state=on]:bg-seal-soft data-[state=on]:text-seal"
+              className="gap-1.5 px-2.5"
               onPressedChange={pressed => set('types', pressed ? TYPES.filter(t => t === type || draft.types.includes(t)) : draft.types.filter(t => t !== type))}>
               {CONTENT_LABELS[type]}<span className="text-[11px] font-normal tabular-nums">{count}</span>
             </Toggle>;

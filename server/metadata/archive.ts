@@ -192,7 +192,7 @@ export async function importDump(zip: string, target: string, info: Omit<Archive
     const complete: ArchiveInfo = { ...info, importedAt: new Date().toISOString(), subjects: books.size };
     for (const [key, value] of Object.entries(complete)) if (value !== null) meta.run(key, String(value));
     db.exec('COMMIT');
-    db.run("INSERT INTO subject_names (subject_names) VALUES ('optimize')");
+    // No FTS 'optimize': merging the whole index blocks the event loop for seconds on a NAS; automerge keeps it in check.
     return books.size;
   } finally {
     db.close();

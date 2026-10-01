@@ -1,4 +1,4 @@
-// The shelf's status strip and the first-run guide.
+// The shelf's status strip (phones; the desktop sidebar shows the same), the next check, and the first-run guide.
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
@@ -40,10 +40,17 @@ export function CheckAllButton({ status, subscribed, variant = 'outline', size =
     onSuccess: ({ queued }) => void toast.success(queued ? `正在检查 ${queued} 部追更中的漫画` : '还没有追更中的漫画', { description: queued ? '发现新章节后会自动加入下载队列。' : undefined }),
   });
   const checking = status.checking || check.isPending;
-  return <Button variant={variant} size={size} className={className} aria-label="立即检查全部" aria-disabled={checking || !subscribed}
+  return <Button variant={variant} size={size} className={className} aria-label="立即检查全部" title="立即检查全部" aria-disabled={checking || !subscribed}
     onClick={() => { if (!checking && subscribed) check.mutate(); }}>
     <RefreshCw className={cn(checking && 'animate-spin')} />{children}
   </Button>;
+}
+
+/** " · 下次检查 3 小时后" for the page header on desktop, where the status strip is not shown. */
+export function NextCheck({ status }: { status: Status }) {
+  const now = useNow();
+  const text = status.checking ? '正在检查' : status.nextCheckAt ? `下次检查 ${fromNow(status.nextCheckAt, now)}` : null;
+  return text && <span aria-live="polite"> · {text}</span>;
 }
 
 export function StatusStrip({ status, reserveMB, subscribed }: { status: Status; reserveMB?: number; subscribed: number }) {
@@ -53,7 +60,7 @@ export function StatusStrip({ status, reserveMB, subscribed }: { status: Status;
   const history = completed > 0 ? `已完成 ${completed}` : undefined;
   const low = kmoe.remainingMB !== null && reserveMB !== undefined && kmoe.remainingMB < reserveMB;
 
-  return <section aria-label="概览" className="grid grid-cols-3 divide-x overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
+  return <section aria-label="概览" className="grid grid-cols-3 divide-x overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border md:hidden">
     <Link to="/downloads" className={cn(cell, link)}>
       {queue.paused ? <Cell to icon={Pause} tone="warning" label="下载队列" value="已暂停" valueTone="text-warning" detail={PAUSE_LABELS[queue.reason ?? 'manual']} />
         : running ? <Cell to icon={LoaderCircle} spin tone="seal" label="下载队列" value={`下载中 ${running}`}
@@ -73,10 +80,6 @@ export function StatusStrip({ status, reserveMB, subscribed }: { status: Status;
     <div className={cell}>
       <Cell icon={checking ? LoaderCircle : CalendarClock} spin={checking} tone={checking ? 'seal' : 'muted'} label="下次检查"
         value={<span aria-live="polite">{checking ? '检查中…' : status.nextCheckAt ? fromNow(status.nextCheckAt, now) : subscribed ? '未安排' : '—'}</span>} />
-      {/* Phones have this button in the top bar; narrow cells show it as an icon, wide ones with its name. */}
-      <CheckAllButton status={status} subscribed={subscribed} className="size-7 px-0 max-md:hidden @min-[11rem]:w-auto @min-[11rem]:px-2">
-        <span className="hidden @min-[11rem]:inline">立即检查</span>
-      </CheckAllButton>
     </div>
   </section>;
 }
@@ -105,7 +108,7 @@ export function Onboarding({ status }: { status: Status }) {
       <p className="text-xs text-muted-foreground">书架还是空的。登录 Kmoe、确认保存位置，再去找第一部漫画。</p>
     </div>
     <ol className="relative flex flex-col divide-y md:flex-row md:divide-x md:divide-y-0">
-      <Step index={1} done={kmoe} title="登录 Kmoe" description="用于搜索和下载，密码只用一次，不会保存。"
+      <Step index={1} done={kmoe} title="登录 Kmoe" description="用于搜索和下载；默认不保存密码。"
         action={<Button size="xs" variant="outline" asChild><Link to="/settings/$section" params={{ section: 'account' }}>去登录<ChevronRight data-icon="inline-end" /></Link></Button>} />
       <Step index={2} done={status.targets > 0} title="确认保存位置" description="默认已有「本地书库」，也可以添加 WebDAV。"
         action={<Button size="xs" variant="outline" asChild><Link to="/settings/$section" params={{ section: 'storage' }}>存储位置<ChevronRight data-icon="inline-end" /></Link></Button>} />

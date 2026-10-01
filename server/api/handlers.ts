@@ -105,6 +105,7 @@ export function createHandlers(app: App): Handlers {
     'POST /api/tasks/:id/cancel': ({ params }) => { tasks.cancel(id(params.id)); return ok; },
     'POST /api/tasks/:id/retry': ({ params }) => { tasks.retry(id(params.id)); return ok; },
     'POST /api/tasks/retry-failed': () => ({ retried: tasks.retryFailed() }),
+    'POST /api/tasks/cancel-queued': () => ({ cancelled: tasks.cancelAllQueued() }),
     'POST /api/tasks/clear-finished': () => ({ removed: tasks.clearFinished() }),
     'POST /api/queue/pause': () => { worker.pause('manual'); return queueState(); },
     'POST /api/queue/resume': () => {

@@ -114,8 +114,10 @@ export function createLocalTarget(options: { libraryRoot: string; path: string }
       // Another filesystem (always the case between Docker volumes): copy next to the destination under a hidden name first,
       // so an interrupted copy never leaves a truncated book under the real name, then publish it atomically without clobbering.
       const temp = join(dirname(dest), `${OWN}-${crypto.randomUUID()}.part`);
+      // copyFile reports nothing: watch the copy grow, so the task shows progress instead of 0 % for the whole copy.
+      const watch = options.onProgress && setInterval(() => void fs.stat(temp).then(stat => options.onProgress?.(stat.size, source.size), () => undefined), 500);
       try {
-        await fs.copyFile(source.path, temp, constants.COPYFILE_EXCL);
+        await fs.copyFile(source.path, temp, constants.COPYFILE_EXCL).finally(() => clearInterval(watch));
         if ((await fs.stat(temp)).size !== source.size) throw new StorageError('io', '复制后文件大小核验失败，已撤销写入');
         try { await fs.link(temp, dest); } catch (linkError) {
           if (code(linkError) === 'EEXIST') return await settle(dest, source);

@@ -79,6 +79,18 @@ it('copies exclusively when a hard link is impossible (EXDEV) and cleans up afte
       expect(await storage.put('/y.epub', source('d.part', 'data'), signal()).catch(error => error)).toMatchObject({ code: 'no_space' });
       expect(existsSync(join(root, 'y.epub'))).toBe(false);
     } finally { copy.mockRestore(); }
+
+    // A slow copy (a big book onto a NAS disk) shows how far it got, not 0 % until it is done.
+    const slow = spyOn(fs, 'copyFile').mockImplementationOnce(async (from, to) => {
+      writeFileSync(String(to), readFileSync(String(from)).subarray(0, 2));
+      await Bun.sleep(700);
+      writeFileSync(String(to), readFileSync(String(from)));
+    });
+    const progress: [number, number][] = [];
+    try {
+      expect(await storage.put('/z.epub', source('e.part', 'data'), { ...signal(), onProgress: (sent, total) => progress.push([sent, total]) })).toBe('stored');
+    } finally { slow.mockRestore(); }
+    expect(progress).toEqual([[2, 4], [4, 4]]);
   } finally { link.mockRestore(); }
 });
 

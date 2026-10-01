@@ -22,11 +22,13 @@ export function Notice({ children, tone = 'info', className, live = true }: { ch
 }
 
 /** Asks before an irreversible action. `returnFocus` supplies a target when the trigger itself goes away. */
-export function ConfirmAction({ children, title, description, action = '删除', variant = 'destructive', extra, onConfirm, returnFocus }: {
+export function ConfirmAction({ children, title, description, action = '删除', cancel = '取消', variant = 'destructive', extra, onConfirm, returnFocus }: {
   children: ReactNode;
   title: string;
   description?: ReactNode;
   action?: string;
+  /** The way out, when 取消 would read like the action itself. */
+  cancel?: string;
   variant?: 'destructive' | 'default';
   extra?: ReactNode;
   onConfirm: () => void;
@@ -41,7 +43,7 @@ export function ConfirmAction({ children, title, description, action = '删除',
       </AlertDialogHeader>
       {extra}
       <AlertDialogFooter>
-        <AlertDialogCancel>取消</AlertDialogCancel>
+        <AlertDialogCancel>{cancel}</AlertDialogCancel>
         <AlertDialogAction variant={variant} onClick={onConfirm}>{action}</AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>

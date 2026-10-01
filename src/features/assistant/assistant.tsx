@@ -208,7 +208,7 @@ function Panel({ onClose }: { onClose: () => void }) {
   const reset = () => { abort.current?.abort(); setConversation(EMPTY); save(EMPTY); setPending(null); setError(null); setLive(null); input.current?.focus(); };
 
   const turns = turnsOf(conversation.messages);
-  return <aside role="dialog" aria-modal="false" aria-labelledby="assistant-title" onKeyDown={e => { if (e.key === 'Escape') close(); }}
+  return <aside role="dialog" aria-modal="false" aria-labelledby="assistant-title" onKeyDown={e => { if (e.key === 'Escape' && !e.nativeEvent.isComposing) close(); }}
     className="fixed inset-0 z-50 flex animate-rise flex-col bg-background md:inset-auto md:top-4 md:right-4 md:bottom-4 md:w-[440px] md:overflow-hidden md:rounded-2xl md:bg-card md:shadow-panel md:ring-1 md:ring-border">
     <header className="flex items-center gap-2 border-b px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
       <Sparkles aria-hidden className="size-4 text-muted-foreground" />

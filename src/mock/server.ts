@@ -967,6 +967,13 @@ export function createMockServer(scenario: Scenario) {
       emitStatus();
       return { retried: failed.length };
     },
+    'POST /api/tasks/cancel-queued': () => {
+      const queued = db.tasks.filter(t => t.status === 'queued');
+      for (const task of queued) stop(task, 'cancelled');
+      for (const key of new Set(queued.map(t => t.comicKey))) touch(key);
+      emitStatus();
+      return { cancelled: queued.length };
+    },
     'POST /api/tasks/clear-finished': () => {
       const before = db.tasks.length;
       db.tasks = db.tasks.filter(t => t.status !== 'completed');

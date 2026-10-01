@@ -91,7 +91,6 @@ function ChannelCard({ channel, saved, all, onDone }: { channel: Channel; saved:
         <legend className="mb-2.5 text-sm font-medium">推送这些事件</legend>
         <div className="flex flex-wrap gap-1.5">
           {NotifyEvent.options.map(event => <Toggle key={event} variant="outline" size="sm" pressed={draft.events.includes(event)}
-            className="data-[state=on]:border-seal/45 data-[state=on]:bg-seal-soft data-[state=on]:text-seal"
             onPressedChange={on => set('events', on ? NotifyEvent.options.filter(e => e === event || draft.events.includes(e)) : draft.events.filter(e => e !== event))}>
             {NOTIFY_LABELS[event]}
           </Toggle>)}

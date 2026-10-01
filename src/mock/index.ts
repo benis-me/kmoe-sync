@@ -23,10 +23,12 @@ function requested(): Scenario | null {
   return stored ?? (import.meta.env.MODE === 'demo' ? 'full' : null);
 }
 
+// Constant-folded, so production builds drop the demo entirely; `vite build --mode demo` keeps it (static demo site).
+// Runs on import, so the URL is rewritten (?mock dropped) before the router, imported after this module, reads it.
+if (import.meta.env.DEV || import.meta.env.MODE === 'demo') active = requested();
+
 export async function installMock() {
-  // Constant-folded, so production builds drop the demo entirely; `vite build --mode demo` keeps it (static demo site).
   if (import.meta.env.DEV || import.meta.env.MODE === 'demo') {
-    active = requested();
     if (!active) return;
     const { createMockServer } = await import('./server');
     const server = createMockServer(active);

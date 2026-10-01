@@ -74,6 +74,7 @@ export const endpoints = {
   'POST /api/tasks/:id/cancel': { res: Ok },
   'POST /api/tasks/:id/retry': { res: Ok },
   'POST /api/tasks/retry-failed': { res: z.object({ retried: z.number() }) },
+  'POST /api/tasks/cancel-queued': { res: z.object({ cancelled: z.number() }) },
   'POST /api/tasks/clear-finished': { res: z.object({ removed: z.number() }) },
   'POST /api/queue/pause': { res: QueueState },
   'POST /api/queue/resume': { res: QueueState },
