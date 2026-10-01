@@ -10,6 +10,7 @@ export const JOB_LABELS: Record<LibraryJobKind, { label: string; running: string
   bangumi: { label: '匹配 Bangumi', running: '正在匹配 Bangumi' },
   komga: { label: '同步到 Komga', running: '正在同步到 Komga' },
   ai: { label: 'AI 处理', running: 'AI 正在处理' },
+  follow: { label: '追更连载中的漫画', running: '正在订阅连载中的漫画' },
 };
 /** What each AI pass is called (they all run as the 'ai' job). */
 export const AI_LABELS = {

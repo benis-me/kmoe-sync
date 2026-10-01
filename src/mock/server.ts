@@ -74,7 +74,7 @@ const subjectOf = (entry: BangumiEntry, withCover: boolean): BangumiSubject => (
   id: entry.id, name: entry.name, nameCn: entry.nameCn, platform: entry.platform ?? '漫画', date: entry.date, cover: withCover ? coverFor(entry.nameCn, `bgm-${entry.id}`) : null,
   volumes: entry.volumes, authors: entry.authors, series: entry.series ?? true, url: `https://bgm.tv/subject/${entry.id}`,
 });
-const JOB_NAMES: Record<LibraryJobKind, string> = { scan: '扫描书库', kmoe: '匹配 Kmoe', bangumi: '匹配 Bangumi', komga: '同步到 Komga', ai: 'AI 处理' };
+const JOB_NAMES: Record<LibraryJobKind, string> = { scan: '扫描书库', kmoe: '匹配 Kmoe', bangumi: '匹配 Bangumi', komga: '同步到 Komga', ai: 'AI 处理', follow: '订阅连载中的漫画' };
 /** Komga problems the demo shows: locked for good, not scanned by Komga yet, or a failure that goes away on retry. */
 const KOMGA_LOCKED = new Set(['寄生獸 完全版']), KOMGA_MISSING = new Set(['惡之華', 'BLUE GIANT EXPLORER']);
 const KOMGA_FLAKY: Record<string, string> = { AKIRA: '连接 Komga 超时（10 秒），稍后重试', 我推的孩子: 'Komga 返回 500：写入第 16 卷的信息时出错' };
@@ -248,6 +248,20 @@ export function createMockServer(scenario: Scenario) {
       if (wanted.length) createTasks(comic, wanted.map(entry => entry.id), input.format, input.targetId, 'subscription');
     }
     return { queue: wanted.length, cancel: cancel.length, sizeMB: Math.round(wanted.reduce((sum, entry) => sum + sizeOf(entry, input.format), 0) * 10) / 10, unknown };
+  }
+  function saveSubscription(comic: MockComic, input: SubscriptionInput): Subscription {
+    const old = db.subscriptions.get(comic.key);
+    policy(comic, input, true);
+    const next: Subscription = {
+      id: old?.id ?? nextId(), comicKey: comic.key, enabled: input.enabled, types: input.types, format: input.format, targetId: input.targetId,
+      strategy: input.strategy, line: input.line as Line, lastCheckAt: old?.lastCheckAt ?? null, lastSuccessAt: old?.lastSuccessAt ?? null,
+      nextCheckAt: input.enabled ? old?.nextCheckAt ?? iso(Date.now() + db.settings.checkIntervalHours * 3600_000) : null,
+      error: old?.error ?? null, createdAt: old?.createdAt ?? iso(),
+    };
+    db.subscriptions.set(comic.key, next);
+    touch(comic.key);
+    emitStatus();
+    return next;
   }
 
   /** A subscription check: reveals the next upcoming chapter, if the demo has one left. */
@@ -494,8 +508,11 @@ export function createMockServer(scenario: Scenario) {
     targetOf(targetId);
     const folders = db.folders.filter(f => f.targetId === targetId).map(folderView);
     const scannedAt = folders.reduce<string | null>((last, f) => f.scannedAt && (!last || f.scannedAt > last) ? f.scannedAt : last, null) ?? db.lastScan[targetId] ?? null;
-    return { targetId, scannedAt, job: { ...db.job }, counts: tally(folders), folders };
+    return { targetId, scannedAt, job: { ...db.job }, counts: tally(folders), folders, follow: unfollowed(targetId).length };
   }
+  /** Linked folders of ongoing (連載) comics that are not subscribed. */
+  const unfollowed = (targetId: number) => db.folders.filter(f => f.targetId === targetId && f.kmoe.state === 'matched' && f.kmoe.comicKey
+    && /連載|连载/.test(comicOf(f.kmoe.comicKey).status) && !db.subscriptions.has(f.kmoe.comicKey));
 
   /** The naming rule's folder for a comic, relative to the target. */
   function ruleDir(target: Target, comic: MockComic) {
@@ -891,22 +908,7 @@ export function createMockServer(scenario: Scenario) {
     'GET /api/comics/:key': ({ params, query }) => detail(params.key!, query),
     'POST /api/comics/:key/refresh': ({ params, query }) => { comicOf(params.key!).fetchedAt = iso(); return detail(params.key!, query); },
     'POST /api/comics/:key/library-check': ({ params, body }) => libraryCheck(params.key!, body.targetId, body.format),
-    'PUT /api/comics/:key/subscription': ({ params, body }) => {
-      const comic = comicOf(params.key!);
-      targetOf(body.targetId);
-      const old = db.subscriptions.get(comic.key);
-      policy(comic, body, true);
-      const next: Subscription = {
-        id: old?.id ?? nextId(), comicKey: comic.key, enabled: body.enabled, types: body.types, format: body.format, targetId: body.targetId,
-        strategy: body.strategy, line: body.line as Line, lastCheckAt: old?.lastCheckAt ?? null, lastSuccessAt: old?.lastSuccessAt ?? null,
-        nextCheckAt: body.enabled ? old?.nextCheckAt ?? iso(Date.now() + db.settings.checkIntervalHours * 3600_000) : null,
-        error: old?.error ?? null, createdAt: old?.createdAt ?? iso(),
-      };
-      db.subscriptions.set(comic.key, next);
-      touch(comic.key);
-      emitStatus();
-      return next;
-    },
+    'PUT /api/comics/:key/subscription': ({ params, body }) => { targetOf(body.targetId); return saveSubscription(comicOf(params.key!), body); },
     'POST /api/comics/:key/subscription/preview': ({ params, body }) => { targetOf(body.targetId); return policy(comicOf(params.key!), body, false); },
     'DELETE /api/comics/:key/subscription': ({ params, query }) => {
       subscriptionOf(params.key!);
@@ -1180,6 +1182,17 @@ export function createMockServer(scenario: Scenario) {
       if (!komgaOn(target.id)) throw new Fail(409, 'metadata_disabled', db.metadata.enabled ? '这个存储位置没有对应的 Komga 库' : '还没有开启 Komga 元数据');
       const todo = foldersOf(target.id).filter(f => f.metadata.bangumi.state === 'matched' && (body.all || f.metadata.komga.dirty || f.metadata.komga.state === 'pending' || f.metadata.komga.state === 'error'));
       return runJob('komga', target, todo.map(f => ({ label: f.path, run: () => syncFolder(f, 'job') })), undefined, 180);
+    },
+    'POST /api/library/follow': ({ body }) => {
+      ensureIdle();
+      if (db.kmoe.state !== 'active') throw new Fail(409, 'kmoe_login_required', '需要先登录 Kmoe');
+      const target = targetOf(body.targetId);
+      return runJob('follow', target, unfollowed(target.id).map(f => ({ label: f.path, run: () => {
+        const comic = comicOf(f.kmoe.comicKey!);
+        const present = (['volume', 'extra', 'serial'] as const).filter(type => comic.items.some(entry => entry.type === type));
+        const types = present.includes('volume') || !present.length ? ['volume' as const] : [present[0]!];
+        saveSubscription(comic, { enabled: true, types, format: folderView(f).format ?? db.settings.defaultFormat, targetId: target.id, strategy: 'future', line: db.settings.defaultLine });
+      } })));
     },
     'POST /api/library/cancel': () => {
       if (db.job.running) finishJob(db.job.targetId!, null, true);

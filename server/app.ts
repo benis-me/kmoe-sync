@@ -68,11 +68,11 @@ function createCore(config: Config, options: AppOptions) {
   const tasks = new TaskService(db, hub, settings, comics, targets);
   const jobs = new JobRunner(hub);
   const metadata = new MetadataService({ db, hub, sealer, settings, activity, comics, targets, kmoe, jobs, fetch: options.fetch, dataDir: config.dataDir });
-  const library = new LibraryService({ db, hub, comics, targets, kmoe, settings, jobs, metadata, pace: options.bulkPaceMs });
+  const subscriptions = new SubscriptionService({ db, hub, comics, tasks, targets, settings, activity, pace: options.bulkPaceMs });
+  const library = new LibraryService({ db, hub, comics, targets, kmoe, settings, jobs, metadata, subscriptions, pace: options.bulkPaceMs });
   comics.hooks = { folder: (comicId, targetId) => library.comicFolder(comicId, targetId), metadata: id => metadata.forFolders([id]).get(id) ?? null };
   library.backfill();
   const worker = new Worker({ db, tasks, comics, targets, kmoe, settings, activity, library, tmpDir: join(config.dataDir, 'tmp') });
-  const subscriptions = new SubscriptionService({ db, hub, comics, tasks, targets, settings, activity, pace: options.bulkPaceMs });
   const sources = new SourceService(db, hub, activity, net);
   const auth = new AdminAuth(db, config.secureCookies);
 
@@ -286,8 +286,10 @@ export function createApp(config: Config, options: AppOptions = {}) {
       if (pause.reason === 'throttled' && !kmoeThrottle()) worker.resume();
       const throttled = Boolean(kmoeThrottle());
       if (throttled !== wasThrottled) { wasThrottled = throttled; app.emitStatus(); }
-      await subscriptions.checkDue();
-      await library.tick();
+      // A batch of checks takes 10 s a comic: it runs on by itself (one at a time) instead of holding up the next ticks,
+      // which resume the queue and log in again. Library hydrating waits for it, so bulk Kmoe work stays one page per 10 s.
+      void subscriptions.checkDue().catch(error => console.error('[subscriptions]', error));
+      if (!subscriptions.checking) await library.tick();
       // A first metadata sync can take minutes at Bangumi's rate limit: never hold up subscription checks for it
       // (the metadata tick prevents its own overlap).
       void metadata.tick().catch(error => console.error('[metadata]', error));

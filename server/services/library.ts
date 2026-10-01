@@ -1,6 +1,6 @@
 // Series folders on disk ("library folders"): scan a storage target, match folders to Kmoe comics, map comics to
 // existing folders, and keep folder rows in step with downloads. One folder = one Komga series. Files are never moved.
-import type { AiVerdict, ComicFolder, Format, KmoeCandidate, KmoeLinkState, LibraryCheck, LibraryCounts, LibraryFolder, LibraryJob, LibraryOverview } from '@shared/model';
+import type { AiVerdict, ComicFolder, ContentType, Format, KmoeCandidate, KmoeLinkState, LibraryCheck, LibraryCounts, LibraryFolder, LibraryJob, LibraryOverview } from '@shared/model';
 import { joinPath, normalizePath, renderRule } from '@shared/naming';
 import { AI_CONFIDENT, type AiService, type FolderFacts } from '../ai/service';
 import { now, json, type DB } from '../db';
@@ -16,6 +16,7 @@ import type { ComicService } from './comics';
 import type { JobContext, JobRunner } from './jobs';
 import type { KmoeService } from './kmoe';
 import type { SettingsStore } from './settings';
+import type { SubscriptionService } from './subscriptions';
 import type { TargetService } from './targets';
 
 export interface FolderRow {
@@ -110,6 +111,7 @@ const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, r
 export class LibraryService {
   constructor(private readonly deps: {
     db: DB; hub: EventHub; comics: ComicService; targets: TargetService; kmoe: KmoeService; settings: SettingsStore; jobs: JobRunner; metadata: MetadataService;
+    subscriptions: SubscriptionService;
     /** Spacing between Kmoe requests in bulk jobs (tests shorten it). */
     pace?: number;
   }) {}
@@ -180,7 +182,7 @@ export class LibraryService {
     };
     for (const folder of folders) { counts.kmoe[folder.kmoe.state]++; counts.bangumi[folder.metadata.bangumi.state]++; counts.komga[folder.metadata.komga.state]++; }
     const scanned = this.deps.db.query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?').get(`libraryScan:${targetId}`);
-    return { targetId, scannedAt: scanned ? json<string | null>(scanned.value, null) : null, job: this.deps.jobs.current(), counts, folders };
+    return { targetId, scannedAt: scanned ? json<string | null>(scanned.value, null) : null, job: this.deps.jobs.current(), counts, folders, follow: this.unfollowed(targetId).length };
   }
 
   private touched(row: FolderRow) {
@@ -660,6 +662,48 @@ export class LibraryService {
         await sleep(this.pace, context.signal);
       }
       this.deps.hub.emit({ type: 'shelf' });
+    });
+  }
+
+  /**
+   * Linked folders whose comic is still coming out (連載) and not followed. Not those with subscription downloads still
+   * waiting (from an earlier subscription): a new one would cancel them.
+   */
+  private unfollowed(targetId: number): (FolderRow & { key: string })[] {
+    return this.deps.db.query<FolderRow & { key: string }, [number]>(`SELECT f.*, c.key FROM library_folders f JOIN comics c ON c.id = f.comic_id
+      WHERE f.target_id = ? AND (c.status LIKE '%連載%' OR c.status LIKE '%连载%') AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.comic_id = c.id)
+        AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.comic_id = c.id AND t.status = 'queued' AND t.origin = 'subscription')
+      ORDER BY f.path COLLATE NOCASE`).all(targetId);
+  }
+
+  /**
+   * Follows every ongoing comic linked here, for new items only (仅追新) and in its folder's format: nothing is downloaded
+   * now and no quota spent. A Kmoe page per comic gives the baseline of what is out already, so this is paced like a scan.
+   */
+  follow(targetId: number): LibraryJob {
+    this.deps.targets.get(targetId);
+    this.requireKmoe();
+    return this.deps.jobs.start('follow', targetId, async context => {
+      const rows = this.unfollowed(targetId);
+      context.progress({ total: rows.length, done: 0 });
+      for (const [index, row] of rows.entries()) {
+        context.signal.throwIfAborted();
+        context.progress({ done: index, current: row.path });
+        // What the comic page offers by default: volumes, else the one kind of item the comic has.
+        const present = (['volume', 'extra', 'serial'] as const).filter(type => this.deps.comics.items(row.comic_id!).some(item => item.type === type));
+        const types: ContentType[] = present.includes('volume') || !present.length ? ['volume'] : [present[0]!];
+        const input = { enabled: true, types, format: this.formatOf(row), targetId, strategy: 'future' as const, line: this.deps.settings.get().defaultLine };
+        try { await this.kmoeCall(context, row.path, () => this.deps.subscriptions.save(row.key, input)); } catch (error) {
+          if (context.signal.aborted) throw error;
+          if (error instanceof KmoeError && error.code === 'login_required') throw new AppError(409, 'kmoe_login_required', 'Kmoe 登录已失效，请重新登录后继续');
+          // Kmoe out of reach: the rest would fail the same way. Those done stay followed; starting again does the rest.
+          if (error instanceof KmoeError && error.code === 'network') throw error;
+          this.fail(row, error);
+        }
+        this.deps.hub.emit({ type: 'folders', targetId });
+        await sleep(this.pace, context.signal);
+      }
+      context.progress({ done: rows.length, current: null });
     });
   }
 

@@ -21,13 +21,16 @@ const other = startFakeKmoe({ port: 0 });
 const MIRRORS: Record<string, string> = { 'http://mirror-b.test': fake.origin, 'http://mirror-c.test': other.origin };
 /** Hosts the app sent requests to, for the tests that check where they went. */
 const hosts: string[] = [];
+/** While set, comic pages are only answered once it resolves (a check that waits on Kmoe). */
+let hold: Promise<void> | null = null;
 const flaky = ((input: string | URL | Request, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
   hosts.push(new URL(url).host);
   const code = url.startsWith(fake.origin) ? drops.shift() : undefined;
   if (code) return Promise.reject(Object.assign(new Error(`connection failed (${code})`), { code }));
   const mirror = Object.keys(MIRRORS).find(from => url.startsWith(from));
-  return fetch(mirror ? MIRRORS[mirror] + url.slice(mirror.length) : input, init);
+  const send = () => fetch(mirror ? MIRRORS[mirror] + url.slice(mirror.length) : input, init);
+  return hold && /\/c\/[^/]+\.htm/.test(url) ? hold.then(send) : send();
 }) as typeof fetch;
 const app = createApp({
   host: '127.0.0.1', port: 0, dataDir: join(root, 'data'), libraryRoot: library, staticDir: join(root, 'web'),
@@ -277,6 +280,23 @@ describe('kmoe + downloads', () => {
       await api('DELETE', '/api/comics/8a3dbd/subscription?cancelPending=true');
       await api('POST', '/api/queue/resume');
     }
+  });
+
+  test('scheduler: a batch of checks waiting on Kmoe does not hold up the tick, so a network pause still resumes', async () => {
+    await app.tick(); // the first tick after a start also refreshes the Kmoe account
+    let release = () => {};
+    hold = new Promise<void>(resolve => { release = resolve; });
+    try {
+      const batch = app.subscriptions.checkDue(true);
+      expect(app.subscriptions.checking).toBe(true);
+      app.worker.pause('network');
+      app.db.run("UPDATE settings SET value = ? WHERE key = 'queuePause'", [JSON.stringify({ reason: 'network', since: new Date(Date.now() - 10 * 60_000).toISOString() })]);
+      expect(await Promise.race([app.tick().then(() => 'done'), Bun.sleep(3_000).then(() => 'held up')])).toBe('done');
+      expect((await api('GET', '/api/status')).data.queue.paused).toBe(false);
+      release();
+      await batch;
+      expect(app.subscriptions.checking).toBe(false);
+    } finally { release(); hold = null; }
   });
 
   test('quota exhaustion pauses the queue instead of failing', async () => {

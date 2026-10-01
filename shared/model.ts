@@ -163,8 +163,8 @@ export const LibraryFolder = z.object({
 });
 export type LibraryFolder = z.infer<typeof LibraryFolder>;
 
-/** One background library job at a time: scan folders, match Kmoe, match Bangumi, sync Komga, or an AI pass. */
-export const LibraryJobKind = z.enum(['scan', 'kmoe', 'bangumi', 'komga', 'ai']);
+/** One background library job at a time: scan folders, match Kmoe, match Bangumi, sync Komga, an AI pass, or follow ongoing comics. */
+export const LibraryJobKind = z.enum(['scan', 'kmoe', 'bangumi', 'komga', 'ai', 'follow']);
 export type LibraryJobKind = z.infer<typeof LibraryJobKind>;
 export const LibraryJob = z.object({
   kind: Nullable(LibraryJobKind),
@@ -197,6 +197,8 @@ export const LibraryOverview = z.object({
   job: LibraryJob,
   counts: LibraryCounts,
   folders: z.array(LibraryFolder),
+  /** Linked comics still coming out (連載) that are not followed yet: what 追更连载中的 subscribes. */
+  follow: z.number(),
 });
 export type LibraryOverview = z.infer<typeof LibraryOverview>;
 

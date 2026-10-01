@@ -172,6 +172,7 @@ export function createHandlers(app: App): Handlers {
     'POST /api/library/match-kmoe': ({ body }) => library.matchKmoe(body.targetId, body.retry),
     'POST /api/library/match-bangumi': ({ body }) => { targets.get(body.targetId); return metadata.startMatchJob(body.targetId, body.retry); },
     'POST /api/library/sync-komga': ({ body }) => { targets.get(body.targetId); return metadata.startSyncJob(body.targetId, body.all); },
+    'POST /api/library/follow': ({ body }) => library.follow(body.targetId),
     'POST /api/library/cancel': () => app.jobs.cancel(),
     'POST /api/library/accept-suggested': ({ body }) => library.acceptSuggested(body.targetId, body.minScore),
     'POST /api/library/folders/:id/kmoe': ({ params, body }) => library.linkFolder(id(params.id), body.comic),

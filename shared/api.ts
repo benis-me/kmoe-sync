@@ -115,6 +115,8 @@ export const endpoints = {
   'POST /api/library/match-bangumi': { body: z.object({ targetId: z.number().int(), retry: z.boolean().default(false) }), res: LibraryJob },
   /** Write metadata to Komga: dirty folders, or every matched folder with all=true. */
   'POST /api/library/sync-komga': { body: z.object({ targetId: z.number().int(), all: z.boolean().default(false) }), res: LibraryJob },
+  /** Follow every ongoing comic linked in the target that is not subscribed yet: new items only, in its folder's format. */
+  'POST /api/library/follow': { body: z.object({ targetId: z.number().int() }), res: LibraryJob },
   'POST /api/library/cancel': { res: LibraryJob },
   /** AI picks among the candidates of folders awaiting confirmation or not found (Kmoe or Bangumi); confident picks are linked. */
   'POST /api/library/ai-match': { body: z.object({ targetId: z.number().int(), kind: z.enum(['kmoe', 'bangumi']) }), res: LibraryJob },

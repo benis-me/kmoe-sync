@@ -183,6 +183,28 @@ describe('following an imported comic', () => {
   }, 30_000);
 });
 
+describe('following the imported library', () => {
+  test('one job follows the ongoing comics that are not subscribed: new items only, in the folder\'s format, nothing downloaded', async () => {
+    const subscription = async (key: string) => (await api('GET', `/api/comics/${key}`)).data.subscription;
+    // Linked: 葬送的芙莉蓮 (again, after the mapping above) and 間諜家家酒 are coming out; 渣女沒渣報 is followed already
+    // (its serial chapters); 迷宮飯 has ended.
+    await api('POST', `/api/library/folders/${folderAt(await overview(), '/葬送的芙莉蓮').id}/kmoe`, { comic: 'f7e2c9' });
+    await api('PUT', '/api/comics/8a3dbd/subscription', { enabled: true, types: ['serial'], format: 'epub', targetId, strategy: 'future', line: 0 });
+    expect((await overview()).follow).toBe(2);
+    expect((await api('POST', '/api/library/follow', { targetId })).data).toMatchObject({ kind: 'follow', running: true });
+    const done = await until(overview, value => !value.job.running);
+    expect(done.job).toMatchObject({ kind: 'follow', error: null, done: 2, total: 2 });
+    expect(done.follow).toBe(0);
+    for (const key of ['f7e2c9', 'c9d0e1']) {
+      expect(await subscription(key)).toMatchObject({ enabled: true, types: ['volume'], format: 'epub', targetId, strategy: 'future' });
+      expect(await tasksOf(key)).toEqual([]);
+    }
+    expect(await subscription('8a3dbd')).toMatchObject({ types: ['serial'] });
+    expect(await subscription('b1c4a0')).toBeNull();
+    for (const key of ['f7e2c9', 'c9d0e1', '8a3dbd']) await api('DELETE', `/api/comics/${key}/subscription?cancelPending=true`);
+  }, 30_000);
+});
+
 describe('matching by the Kmoe ids in the files', () => {
   test('EPUBs name their comic, so only folders whose ids settle nothing need a search', async () => {
     mkdirSync(join(library, '第二书库'), { recursive: true });

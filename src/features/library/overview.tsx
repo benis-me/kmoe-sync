@@ -1,7 +1,7 @@
 // 书库 overview: the status strip (counts + the job each column starts), the running job, and the first-run intro.
 import { Fragment, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Check, FolderSearch, Link2, LoaderCircle, RefreshCw, ScanSearch, Settings2, Sparkles, Tags, WandSparkles, X } from 'lucide-react';
+import { BookmarkPlus, Check, FolderSearch, Link2, LoaderCircle, RefreshCw, ScanSearch, Settings2, Sparkles, Tags, WandSparkles, X } from 'lucide-react';
 import { cn } from 'cn';
 import { STAGES, countBy, optionOf, type FolderFilters, type Stage } from '@shared/folder-status';
 import type { LibraryJob, LibraryJobKind, LibraryOverview, MetadataSettings, Target } from '@shared/model';
@@ -43,11 +43,11 @@ function Picks({ stage, values, counts, filters, onPick }: { stage: Stage; value
 }
 
 /** Starts one kind of job; shows its spinner while it is being started or runs, and waits while another job runs. */
-function JobButton({ kind, jobs, icon, children }: { kind: JobStart; jobs: JobControl; icon: ReactNode; children: ReactNode }) {
+function JobButton({ kind, jobs, icon, hint, children }: { kind: JobStart; jobs: JobControl; icon: ReactNode; hint?: string; children: ReactNode }) {
   const busy = jobs.starting === kind || (kind in AI_LABELS ? jobs.running?.kind === 'ai' && jobs.ai === kind : jobs.running?.kind === kind);
   const blocked = !!jobs.running || !!jobs.starting;
   return <Button variant="ghost" size="xs" className="text-muted-foreground" aria-disabled={blocked}
-    title={jobs.running?.kind && !busy ? `${jobLabels(jobs.running.kind, jobs.ai).running}，完成后再试` : undefined}
+    title={jobs.running?.kind && !busy ? `${jobLabels(jobs.running.kind, jobs.ai).running}，完成后再试` : hint}
     onClick={() => { if (!blocked) jobs.start(kind); }}>
     {busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : icon}{children}
   </Button>;
@@ -82,6 +82,9 @@ export function LibraryStrip({ overview, metadata, kmoeActive, ai, jobs, filters
       action={kmoeActive ? <Actions>
         <JobButton kind="kmoe" jobs={jobs} icon={<Link2 data-icon="inline-start" />}>匹配 Kmoe</JobButton>
         {ai && n(kmoe, 'suggested', 'unmatched') > 0 && <JobButton kind="ai-kmoe" jobs={jobs} icon={<Sparkles data-icon="inline-start" />}>AI 判定</JobButton>}
+        {overview.follow > 0 && <JobButton kind="follow" jobs={jobs} icon={<BookmarkPlus data-icon="inline-start" />} hint="仅追新：只下载之后新出的，不补现有的缺卷">
+          追更连载中的 {overview.follow} 部
+        </JobButton>}
       </Actions> : settingsLink('登录 Kmoe', 'account')} />
     {metaOn ? <>
       <Cell label="Bangumi" value={`已匹配 ${n(bangumi, 'matched')}`} sub={noBangumi ? <span className="text-warning" title={noBangumi}>{noBangumi}</span> : picks('bangumi', bangumi, ['suggested', 'unmatched', 'none'], done)}

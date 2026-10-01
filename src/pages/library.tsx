@@ -118,6 +118,7 @@ function LibraryView({ target, targets, filters, onFilters }: { target: Target; 
       if (kind === 'scan') return request('POST /api/library/scan', { body: { targetId, match: kmoeActive } });
       if (kind === 'ai-kmoe' || kind === 'ai-bangumi') return request('POST /api/library/ai-match', { body: { targetId, kind: kind === 'ai-kmoe' ? 'kmoe' : 'bangumi' } });
       if (kind === 'ai-polish') return request('POST /api/library/ai-polish', { body: { targetId, all: false } });
+      if (kind === 'follow') return request('POST /api/library/follow', { body: { targetId } });
       // Nothing new to look at: look again at what was not found.
       if (kind === 'kmoe') return request('POST /api/library/match-kmoe', { body: { targetId, retry: counts.kmoe.pending === 0 } });
       if (kind === 'bangumi') return request('POST /api/library/match-bangumi', { body: { targetId, retry: counts.bangumi.none === 0 } });
