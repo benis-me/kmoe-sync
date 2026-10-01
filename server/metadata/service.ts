@@ -28,7 +28,7 @@ import { LATEST_URL } from './dump';
 import { below, KomgaClient, komgaUrl, plainPath, type KomgaConfig, type KomgaLink, type KomgaSeries } from './komga';
 import { findSubject, type MatchInput } from './match';
 import { OfflineData, type OfflineState } from './offline';
-import { seriesText, syncSeries } from './sync';
+import { seriesText, syncSeries, type Written } from './sync';
 import { fold } from './text';
 
 export interface MetadataDeps {
@@ -73,7 +73,7 @@ interface MetaRow {
   folder_id: number; bangumi_id: number | null; bangumi_state: BangumiState; bangumi_subject: string | null; bangumi_candidates: string;
   bangumi_source: Source | null; bangumi_checked_at: string | null; komga_series_id: string | null; komga_state: KomgaState;
   komga_synced_at: string | null; komga_error: string | null; dirty: number; attempts: number; next_attempt_at: string | null; updated_at: string;
-  bangumi_ai: string | null; ai_polish: string | null;
+  bangumi_ai: string | null; ai_polish: string | null; komga_written: string | null;
 }
 /** An AI-tidied summary + tags for one Bangumi subject, next to what syncing would write without it. */
 interface StoredPolish { subjectId: number; original: MetadataText; polished: MetadataText; status: 'pending' | 'accepted' | 'rejected'; at: string }
@@ -565,12 +565,17 @@ export class MetadataService {
       }
       const comic = row.comic_id ? this.deps.comics.byId(row.comic_id) : null;
       const polish = json<StoredPolish | null>(meta.ai_polish, null);
+      const previous = json<Written | null>(meta.komga_written, null);
+      // A series synced before these records were kept still carries our series id: what Komga holds there was written here.
+      const written: Written = previous?.seriesId === series.id ? previous
+        : { seriesId: series.id, series: {}, books: {}, adopt: !previous && meta.komga_series_id === series.id };
       const { subject, volumes, books } = await syncSeries({
         seriesId: series.id, subjectId: meta.bangumi_id, root, files: this.kmoeFiles(row), fileTitle: row.hint ?? comic?.title ?? null,
         polish: polish?.status === 'accepted' && polish.subjectId === meta.bangumi_id ? polish.polished : null,
         comic: comic ? { title: comic.title, status: comic.status, language: comic.language, volumes: this.deps.comics.items(comic.id).filter(item => item.type === 'volume').length } : null,
-        kmoeUrl: comic ? `${this.deps.kmoe.origin()}/c/${comic.key}.htm` : null,
-      }, { komga: run.komga, bangumi: this.bangumi, fetch: this.net, options: stored.options, signal: run.signal });
+        kmoeUrl: comic ? `${this.deps.kmoe.origin()}/c/${comic.key}.htm` : null, written,
+      }, { komga: run.komga, bangumi: this.bangumi, fetch: this.net, options: stored.options, signal: run.signal })
+        .finally(() => this.deps.db.run('UPDATE folder_metadata SET komga_written = ? WHERE folder_id = ?', [JSON.stringify(written), row.id]));
       // A volume downloaded minutes ago is usually not in Komga yet: ask for a scan and come back (after 2, 5, 15, 60 minutes)
       // to write its book. Changes that arrived while this ran (markDirty) also keep the folder dirty.
       const delay = books && this.recentFiles(row).some(path => !books.has(path)) ? BACKOFF_MINUTES[meta.attempts] : undefined;

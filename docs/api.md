@@ -63,9 +63,9 @@ claude mcp add --transport http kmoesync http://nas:8080/mcp --header "Authoriza
 | `search_comics` | 搜索 Kmoe |
 | `get_comic` | 漫画详情与每一卷 / 话的状态 |
 | `list_shelf` | 书架 |
-| `subscribe` / `unsubscribe` | 订阅追更（新订阅默认单行本、补齐缺失；修改时没给的参数保持原样）/ 取消 |
+| `subscribe` / `unsubscribe` | 订阅追更（新订阅默认单行本、补齐缺失，存储位置和格式跟漫画页一致，已导入的漫画按它的文件夹；修改时没给的参数保持原样）/ 取消 |
 | `check_updates` | 检查一部或全部订阅 |
-| `download` | 下载指定项，或某类型下全部缺失的项 |
+| `download` | 下载指定项，或某类型下全部缺失的项（存储位置和格式同上） |
 | `list_downloads` | 下载任务 |
 | `library_check` | 扫描书库核对已有文件 |
 | `get_status` | 服务状态 |

@@ -1,5 +1,6 @@
 // Writing Bangumi metadata to one Komga series and its books. A field Bangumi lacks is left out (never blanked), written
-// fields are locked when asked, and fields that already hold the value are not sent again (re-syncs are quiet).
+// fields are locked when asked, fields that already hold the value are not sent again (re-syncs are quiet), and fields
+// someone locked in Komga are left as they are.
 import type { MetadataOptions, MetadataText } from '@shared/model';
 import { AppError } from '../http/errors';
 import { errorMessage } from '../lib/retry';
@@ -226,17 +227,38 @@ function comparable(key: string, value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** The part of `body` that differs from `current` (a field is resent when its lock differs too); null when nothing does. */
-export function changes(body: Record<string, unknown>, current: Record<string, unknown>): Record<string, unknown> | null {
+/**
+ * What this service wrote to a Komga series and its books (by book id): a digest of each field's value. A field Komga
+ * holds locked with anything else was set there by someone (before the first sync, or edited since) and is left alone.
+ * `adopt`: the series was synced before these records were kept, so what Komga holds now counts as written here.
+ */
+export interface Written { seriesId: string; series: Record<string, string>; books: Record<string, Record<string, string>>; adopt?: boolean }
+const digest = (key: string, value: unknown) => Bun.hash(comparable(key, value)).toString(36);
+
+/**
+ * The part of `body` that differs from `current` (a field is resent when its lock differs too); null when nothing does.
+ * With `written` (what this service last wrote there), a field locked in Komga with another value is not sent.
+ */
+export function changes(body: Record<string, unknown>, current: Record<string, unknown>, written?: Record<string, string>): Record<string, unknown> | null {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
     if (key.endsWith('Lock')) continue;
     const lock = body[`${key}Lock`];
     if (comparable(key, value) === comparable(key, current[key]) && (lock === undefined || current[`${key}Lock`] === lock)) continue;
+    if (written && current[`${key}Lock`] === true && written[key] !== digest(key, current[key])) continue;
     out[key] = value;
     if (lock !== undefined) out[`${key}Lock`] = lock;
   }
   return Object.keys(out).length ? out : null;
+}
+
+/** The record of one series or book, first adopting what Komga holds when asked (see Written). */
+function own(record: Record<string, string>, body: Record<string, unknown>, current: Record<string, unknown>, adopt: boolean) {
+  if (adopt) for (const key of Object.keys(body)) if (!key.endsWith('Lock')) record[key] ??= digest(key, current[key]);
+  return record;
+}
+function remember(record: Record<string, string>, sent: Record<string, unknown>) {
+  for (const [key, value] of Object.entries(sent)) if (!key.endsWith('Lock')) record[key] = digest(key, value);
 }
 
 // ---------- Writing to Komga ----------
@@ -251,6 +273,8 @@ export interface SeriesJob {
   fileTitle: string | null;
   /** Accepted AI summary and tags (see SeriesInput). */
   polish?: MetadataText | null;
+  /** What this service wrote to the series before; updated here write by write, so the caller keeps it even after a failure. */
+  written: Written;
 }
 
 const IMAGE_HOST = /(?:^|\.)bgm\.tv$/i;
@@ -296,26 +320,34 @@ export async function syncSeries(job: SeriesJob, tools: SyncTools): Promise<{ su
   const persons = await bangumi.persons(subject.id, signal);
   const related = await bangumi.related(subject.id, signal);
   const series = await komga.series(job.seriesId, signal);
-  const body = changes(seriesPatch({ subject, persons, related, comic: job.comic, kmoeUrl: job.kmoeUrl, current: series.metadata, options, polish: job.polish }), series.metadata);
-  if (body) await komga.patch('series', series.id, body, signal);
+  const { written } = job, adopt = written.adopt === true;
+  const patch = seriesPatch({ subject, persons, related, comic: job.comic, kmoeUrl: job.kmoeUrl, current: series.metadata, options, polish: job.polish });
+  const body = changes(patch, series.metadata, own(written.series, patch, series.metadata, adopt));
+  if (body) { await komga.patch('series', series.id, body, signal); remember(written.series, body); }
   if (options.posters !== 'off') await poster('series', series.id, subject, tools);
   const volumes = volumeMap(related);
   let books: Set<string> | null = null;
   if (options.books) {
     books = new Set();
+    const listed = new Set<string>();
     const language = languageOf(job.comic), authors = bookAuthors(persons, subject);
     for (const book of await komga.books(series.id, signal)) {
       signal?.throwIfAborted();
+      listed.add(book.id);
       const path = below(job.root, book.url);
       if (path) books.add(path);
       const item = path ? job.files.get(path) : undefined;
       const number = item ? itemNumber(item) : bookNumber(book.name, job.fileTitle);
       const entry = number.kind === 'volume' && !number.range && number.number !== null ? volumes.get(number.number) : undefined;
       const volume = entry ? await bangumi.subject(entry.id, signal) : null;
-      const update = changes(bookPatch({ number, itemName: item?.name ?? null, volume, language, authors, current: book.metadata, options }), book.metadata);
-      if (update) await komga.patch('books', book.id, update, signal);
+      const bookBody = bookPatch({ number, itemName: item?.name ?? null, volume, language, authors, current: book.metadata, options });
+      const record = written.books[book.id] ??= {};
+      const update = changes(bookBody, book.metadata, own(record, bookBody, book.metadata, adopt));
+      if (update) { await komga.patch('books', book.id, update, signal); remember(record, update); }
       if (options.posters === 'all' && volume) await poster('books', book.id, volume, tools);
     }
+    for (const id of Object.keys(written.books)) if (!listed.has(id)) delete written.books[id];
   }
+  delete written.adopt;
   return { subject, volumes: volumes.size, books };
 }

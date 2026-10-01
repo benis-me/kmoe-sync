@@ -252,6 +252,43 @@ describe('writing to Komga', () => {
     expect(direction()).toBe('WEBTOON');
   });
 
+  test('fields someone locked in Komga are left alone: curated before the first sync, or edited there since', async () => {
+    const s = setup();
+    s.configure();
+    const folderId = grandBlue(s);
+    const series = komga.state.series[0]!.metadata, book = komga.state.books[0]!.metadata;
+    // Curated by hand before this service: a locked series title and book title (the summary Komga took from the files is not locked).
+    Object.assign(series, { title: '碧蓝之海（自己的译名）', titleLock: true, summary: '文件里的简介' });
+    Object.assign(book, { title: '第一卷', titleLock: true });
+    await s.metadata.matchFolder(folderId, { auto: true });
+    await s.metadata.syncFolder(folderId);
+    expect(series).toMatchObject({ title: '碧蓝之海（自己的译名）', titleLock: true, summaryLock: true, readingDirection: 'RIGHT_TO_LEFT' });
+    expect(series.summary).not.toBe('文件里的简介');
+    expect(book).toMatchObject({ title: '第一卷', number: '1', isbn: '9789864620111' });
+    // Edited in Komga after the sync (Komga locks what it edits) stays; the fields this service wrote still follow the settings.
+    Object.assign(series, { summary: '自己改过的简介', summaryLock: true });
+    s.metadata.patchSettings({ options: { readingDirection: 'WEBTOON' } });
+    await s.metadata.syncFolder(folderId);
+    expect(series).toMatchObject({ title: '碧蓝之海（自己的译名）', summary: '自己改过的简介', readingDirection: 'WEBTOON' });
+  });
+
+  test('a series synced before these records were kept: its locks are this service\'s own, then later edits there are kept', async () => {
+    const s = setup();
+    s.configure();
+    const folderId = grandBlue(s);
+    await s.metadata.matchFolder(folderId, { auto: true });
+    await s.metadata.syncFolder(folderId);
+    s.db.run('UPDATE folder_metadata SET komga_written = NULL');
+    const series = komga.state.series[0]!.metadata;
+    s.metadata.patchSettings({ options: { readingDirection: 'WEBTOON' } });
+    await s.metadata.syncFolder(folderId);
+    expect(series.readingDirection).toBe('WEBTOON');
+    Object.assign(series, { readingDirection: 'LEFT_TO_RIGHT', readingDirectionLock: true });
+    s.metadata.patchSettings({ options: { readingDirection: 'VERTICAL' } });
+    await s.metadata.syncFolder(folderId);
+    expect(series.readingDirection).toBe('LEFT_TO_RIGHT');
+  });
+
   test('posters: the Bangumi cover is uploaded once and never over a user-uploaded one', async () => {
     const s = setup();
     s.settings.patch({ proxy: 'http://127.0.0.1:7890' });

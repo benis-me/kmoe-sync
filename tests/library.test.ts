@@ -154,6 +154,35 @@ describe('library import', () => {
   }, 30_000);
 });
 
+describe('following an imported comic', () => {
+  test('a MOBI folder is followed in MOBI, and volumes its library check cannot confirm are not downloaded again', async () => {
+    // NANA in MOBI on a target of its own: 卷 01 is recognised, the other file is not, so 卷 02 and 03 cannot be confirmed.
+    book('MOBI/NANA', 'NANA-卷 01.mobi');
+    book('MOBI/NANA', 'NANA 特典.mobi');
+    const mobi = (await api('POST', '/api/targets', { kind: 'local', name: 'MOBI', path: '/MOBI', rule: '{title}/{filename}' })).data.id as number;
+    await api('POST', '/api/library/scan', { targetId: mobi, match: false });
+    const scanned = await until(() => api<LibraryOverview>('GET', `/api/library?targetId=${mobi}`).then(r => r.data), value => !value.job.running);
+    await api('POST', `/api/library/folders/${folderAt(scanned, '/NANA').id}/kmoe`, { comic: '10114' });
+    const detail = (await api('GET', '/api/comics/10114')).data;
+    expect(detail.view).toEqual({ targetId: mobi, format: 'mobi' });
+    expect(['6001', '6002', '6003'].map(id => detail.states[id].state)).toEqual(['downloaded', 'unknown', 'unknown']);
+    const policy = { enabled: true, types: ['volume'], format: 'mobi', targetId: mobi, strategy: 'backfill', line: 0 };
+    expect((await api('POST', '/api/comics/10114/subscription/preview', policy)).data).toMatchObject({ queue: 0, unknown: 2 });
+    // MCP (and the assistant) without a target or format work where the folder is, in its format.
+    const token = (await api('POST', '/api/token')).data.token as string;
+    const tool = async (name: string, args: object) => (await (await fetch(`${base}/mcp`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+    })).json()).result.structuredContent;
+    expect(await tool('download', { key: '10114' })).toMatchObject({ created: 0 });
+    expect(await tool('subscribe', { key: '10114' })).toMatchObject({ targetId: mobi, format: 'mobi', strategy: 'backfill' });
+    expect(await tasksOf('10114')).toEqual([]);
+    await api('DELETE', '/api/comics/10114/subscription?cancelPending=true');
+    expect((await api('DELETE', `/api/targets/${mobi}`)).status).toBe(200);
+    rmSync(join(library, 'MOBI'), { recursive: true, force: true });
+  }, 30_000);
+});
+
 describe('matching by the Kmoe ids in the files', () => {
   test('EPUBs name their comic, so only folders whose ids settle nothing need a search', async () => {
     mkdirSync(join(library, '第二书库'), { recursive: true });

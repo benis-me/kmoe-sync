@@ -101,6 +101,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE kmoe_account ADD COLUMN password BLOB;
   ALTER TABLE kmoe_account ADD COLUMN remember INTEGER NOT NULL DEFAULT 0;
   `,
+  // v5: what this service wrote to each Komga series and its books, so fields someone else locked there are left alone.
+  `
+  ALTER TABLE folder_metadata ADD COLUMN komga_written TEXT;
+  `,
 ];
 
 export type DB = Database;

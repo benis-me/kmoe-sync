@@ -188,7 +188,7 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
           <TooltipContent>默认位置不能删除；先把其他位置设为默认。</TooltipContent>
         </Tooltip>
         : <>
-          <ConfirmAction title={`删除「${target.name}」？`} description="只删除这个存储位置的设置，书库中的文件不受影响。" onConfirm={() => remove.mutate()}>
+          <ConfirmAction title={`删除「${target.name}」？`} description="书库中的文件不受影响，但这个位置的文件夹与 Kmoe 的关联、Bangumi 匹配、Komga 同步状态和下载记录会一并清除，无法恢复。" onConfirm={() => remove.mutate()}>
             <Button type="button" variant="ghost" size="sm" className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 data-icon="inline-start" />删除</Button>
           </ConfirmAction>
           <Button type="button" variant="ghost" size="sm" aria-disabled={makeDefault.isPending} onClick={() => { if (!makeDefault.isPending) makeDefault.mutate(); }}><Star data-icon="inline-start" />设为默认</Button>

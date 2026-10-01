@@ -261,6 +261,24 @@ describe('kmoe + downloads', () => {
     } finally { drops.length = 0; KmoeClient.retryDelays = delays; }
   });
 
+  test('subscription: a volume the user cancelled is not queued again, also after clearing finished tasks', async () => {
+    await api('POST', '/api/queue/pause');
+    try {
+      await api('PUT', '/api/comics/8a3dbd/subscription', { enabled: true, types: ['volume'], format: 'epub', targetId, strategy: 'backfill', line: 0 });
+      const [cancelled, kept] = await tasksOf('8a3dbd');
+      expect([cancelled?.status, kept?.status]).toEqual(['queued', 'queued']);
+      await api('POST', `/api/tasks/${cancelled!.id}/cancel`);
+      expect((await api('POST', '/api/tasks/clear-finished')).status).toBe(200);
+      expect((await api('POST', '/api/comics/8a3dbd/check')).status).toBe(200);
+      const tasks = await tasksOf('8a3dbd');
+      expect(tasks.filter(task => task.itemId === cancelled!.itemId).map(task => task.status)).toEqual(['cancelled']);
+      expect(tasks.filter(task => task.itemId === kept!.itemId).map(task => task.status)).toEqual(['queued']);
+    } finally {
+      await api('DELETE', '/api/comics/8a3dbd/subscription?cancelPending=true');
+      await api('POST', '/api/queue/resume');
+    }
+  });
+
   test('quota exhaustion pauses the queue instead of failing', async () => {
     await control({ quotaExhausted: true });
     await api('POST', '/api/tasks', { comicKey: 'b1c4a0', itemIds: ['4001'], format: 'epub', targetId });

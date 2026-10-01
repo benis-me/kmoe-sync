@@ -16,6 +16,16 @@ export interface Tool { description: string; input: z.ZodObject; run(args: Recor
 
 const key = z.string().min(1).describe('Kmoe 漫画标识（详情页 /c/<key>.htm 中的 key），或完整的 Kmoe 链接');
 
+/** Target and format for a comic when not given: as its page shows it (subscription, imported folder, then the defaults). */
+function viewOf(app: App, comicKey: string, args: Record<string, unknown>): { targetId: number; format: z.infer<typeof Format> } {
+  const query = { targetId: args.targetId as number | undefined, format: args.format as z.infer<typeof Format> | undefined };
+  const comic = app.comics.find(comicKey);
+  const view = comic ? app.comics.view(comic.id, query, app.targets.defaultId())
+    : { targetId: query.targetId ?? app.targets.defaultId(), format: query.format ?? app.settings.get().defaultFormat };
+  if (view.targetId === null) throw new AppError(409, 'no_target', '还没有存储位置，请先在设置中添加');
+  return { targetId: view.targetId, format: view.format };
+}
+
 /** Also the in-app assistant's tools (server/ai/assistant.ts). */
 export const TOOLS: Record<string, Tool> = {
   search_comics: {
@@ -42,13 +52,11 @@ export const TOOLS: Record<string, Tool> = {
     input: z.object({ key, types: z.array(ContentType).min(1).optional(), format: Format.optional(), targetId: z.number().int().optional(), strategy: Strategy.optional() }),
     run: async (args, call, app) => {
       const { key: comicKey } = await call('POST /api/resolve', { body: { input: args.key } });
-      const settings = app.settings.get();
       const comic = app.comics.find(comicKey), existing = comic ? app.subscriptions.get(comic.id) : null;
-      const targetId = (args.targetId as number | undefined) ?? existing?.targetId ?? app.targets.defaultId();
-      if (targetId === null) throw new AppError(409, 'no_target', '还没有存储位置，请先在设置中添加');
+      const { targetId, format } = viewOf(app, comicKey, args);
       return call('PUT /api/comics/:key/subscription', { params: { key: comicKey }, body: {
-        enabled: true, types: args.types ?? existing?.types ?? ['volume'], format: args.format ?? existing?.format ?? settings.defaultFormat, targetId,
-        strategy: args.strategy ?? existing?.strategy ?? 'backfill', line: existing?.line ?? settings.defaultLine,
+        enabled: true, types: args.types ?? existing?.types ?? ['volume'], format, targetId,
+        strategy: args.strategy ?? existing?.strategy ?? 'backfill', line: existing?.line ?? app.settings.get().defaultLine,
       } });
     },
   },
@@ -75,10 +83,7 @@ export const TOOLS: Record<string, Tool> = {
     input: z.object({ key, itemIds: z.array(z.string()).optional(), types: z.array(ContentType).optional(), format: Format.optional(), targetId: z.number().int().optional() }),
     run: async (args, call, app) => {
       const { key: comicKey } = await call('POST /api/resolve', { body: { input: args.key } });
-      const settings = app.settings.get();
-      const format = (args.format as z.infer<typeof Format> | undefined) ?? settings.defaultFormat;
-      const targetId = (args.targetId as number | undefined) ?? app.targets.defaultId();
-      if (targetId === null) throw new AppError(409, 'no_target', '还没有存储位置，请先在设置中添加');
+      const { targetId, format } = viewOf(app, comicKey, args);
       let itemIds = args.itemIds as string[] | undefined;
       if (!itemIds?.length) {
         const detail = await call('GET /api/comics/:key', { params: { key: comicKey }, query: { targetId, format } });
@@ -86,7 +91,7 @@ export const TOOLS: Record<string, Tool> = {
         itemIds = detail.items.filter(item => types.includes(item.type) && ['missing', 'failed'].includes(detail.states[item.id]?.state ?? 'missing')).map(item => item.id);
         if (!itemIds.length) return { created: 0, skipped: 0, sizeMB: 0, note: '没有需要下载的项' };
       }
-      return call('POST /api/tasks', { body: { comicKey, itemIds, format, targetId, line: settings.defaultLine } });
+      return call('POST /api/tasks', { body: { comicKey, itemIds, format, targetId, line: app.settings.get().defaultLine } });
     },
   },
   list_downloads: {

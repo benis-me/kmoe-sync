@@ -313,8 +313,8 @@ export const Subscription = z.object({
 });
 export type Subscription = z.infer<typeof Subscription>;
 
-/** What saving a subscription policy would do right now. */
-export const PolicyImpact = z.object({ queue: z.number(), cancel: z.number(), sizeMB: z.number() });
+/** What saving a subscription policy would do right now. `unknown`: wanted items a library check could not confirm (left out). */
+export const PolicyImpact = z.object({ queue: z.number(), cancel: z.number(), sizeMB: z.number(), unknown: z.number() });
 export type PolicyImpact = z.infer<typeof PolicyImpact>;
 
 export const ComicDetail = z.object({

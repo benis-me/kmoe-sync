@@ -240,14 +240,14 @@ export function createMockServer(scenario: Scenario) {
     const old = db.subscriptions.get(comic.key);
     const keep = (task: Task) => input.enabled && input.types.includes(task.type) && task.format === input.format && task.targetId === input.targetId;
     const cancel = db.tasks.filter(t => t.comicKey === comic.key && t.origin === 'subscription' && t.status === 'queued' && !!old && !keep(t));
-    const wanted = input.enabled && input.strategy === 'backfill'
-      ? comic.items.filter(entry => input.types.includes(entry.type) && ['missing', 'failed'].includes(stateOf(entry, input.targetId, input.format).state))
-      : [];
+    const backfill = input.enabled && input.strategy === 'backfill' ? comic.items.filter(entry => input.types.includes(entry.type)) : [];
+    const wanted = backfill.filter(entry => ['missing', 'failed'].includes(stateOf(entry, input.targetId, input.format).state));
+    const unknown = backfill.filter(entry => stateOf(entry, input.targetId, input.format).state === 'unknown').length;
     if (commit) {
       for (const task of cancel) stop(task, 'cancelled');
       if (wanted.length) createTasks(comic, wanted.map(entry => entry.id), input.format, input.targetId, 'subscription');
     }
-    return { queue: wanted.length, cancel: cancel.length, sizeMB: Math.round(wanted.reduce((sum, entry) => sum + sizeOf(entry, input.format), 0) * 10) / 10 };
+    return { queue: wanted.length, cancel: cancel.length, sizeMB: Math.round(wanted.reduce((sum, entry) => sum + sizeOf(entry, input.format), 0) * 10) / 10, unknown };
   }
 
   /** A subscription check: reveals the next upcoming chapter, if the demo has one left. */
@@ -967,7 +967,7 @@ export function createMockServer(scenario: Scenario) {
     },
     'POST /api/tasks/clear-finished': () => {
       const before = db.tasks.length;
-      db.tasks = db.tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled');
+      db.tasks = db.tasks.filter(t => t.status !== 'completed');
       emitStatus();
       return { removed: before - db.tasks.length };
     },

@@ -36,7 +36,8 @@ export function SubscriptionCard({ detail, targets, settings, vip, remainingMB }
   const present = TYPES.filter(type => detail.items.some(item => item.type === type));
   const saved: Draft = sub
     ? { enabled: sub.enabled, types: sub.types, format: sub.format, targetId: sub.targetId, strategy: sub.strategy, line: sub.line }
-    : { enabled: true, types: present.includes('volume') ? ['volume'] : present.slice(0, 1), format: settings.defaultFormat, targetId: settings.defaultTargetId ?? targets[0]?.id ?? 0, strategy: 'backfill', line: settings.defaultLine };
+    // Where and in which format the page shows the comic: an imported one's folder and file format, else the defaults.
+    : { enabled: true, types: present.includes('volume') ? ['volume'] : present.slice(0, 1), format: detail.view.format, targetId: detail.view.targetId ?? targets[0]?.id ?? 0, strategy: 'backfill', line: settings.defaultLine };
   const savedKey = JSON.stringify(saved);
   const [draft, setDraft] = useState(saved);
   const [base, setBase] = useState(savedKey);
@@ -78,10 +79,11 @@ export function SubscriptionCard({ detail, targets, settings, vip, remainingMB }
   });
 
   const impact = preview.data;
-  const impactText = !impact ? '' : [
+  const impactText = !impact ? '' : ([
     impact.queue ? `将新增 ${impact.queue} 个下载任务 · 约 ${formatMB(impact.sizeMB)}` : '',
     impact.cancel ? `将取消 ${impact.cancel} 个等待中的任务` : '',
-  ].filter(Boolean).join('，') || (!sub && draft.strategy === 'future' ? '现有章节不会下载，之后发布的新章节会自动下载' : !sub ? '没有需要补齐的章节' : '不会新增或取消任务');
+  ].filter(Boolean).join('，') || (!sub && draft.strategy === 'future' ? '现有章节不会下载，之后发布的新章节会自动下载' : !sub ? '没有需要补齐的章节' : '不会新增或取消任务'))
+    + (impact.unknown ? `；另有 ${impact.unknown} 项待确认，不会自动下载` : '');
   const overQuota = !!impact && remainingMB !== null && impact.sizeMB > remainingMB;
 
   return <Card id="subscription" className="scroll-mt-20 gap-0 py-0">

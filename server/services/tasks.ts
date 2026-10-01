@@ -146,8 +146,9 @@ export class TaskService {
     return retried;
   }
 
+  /** Completed only: a cancelled task is how a subscription knows the user does not want that item. */
   clearFinished(): number {
-    const removed = this.db.run("DELETE FROM tasks WHERE status IN ('completed', 'cancelled')").changes;
+    const removed = this.db.run("DELETE FROM tasks WHERE status = 'completed'").changes;
     if (removed) { this.hub.emit({ type: 'shelf' }); this.onChange(); }
     return removed;
   }

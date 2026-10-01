@@ -36,12 +36,13 @@ export class SubscriptionService {
   /**
    * What the policy wants right now: items to queue (not delivered, not queued, not in the library, not cancelled by
    * the user), and queued subscription tasks that no longer fit. `future` only takes items first seen after subscribing.
+   * Items a library check could not confirm (unknown) may well be there: they are counted, never queued.
    */
-  private plan(comicId: number, policy: Policy, includeFailed: boolean): { queue: ItemRow[]; cancel: number[] } {
+  private plan(comicId: number, policy: Policy, includeFailed: boolean): { queue: ItemRow[]; cancel: number[]; unknown: number } {
     const { db, comics } = this.deps;
     const cancel = db.query<{ id: number; item_id: number; target_id: number; format: string }, [number]>(
       "SELECT id, item_id, target_id, format FROM tasks WHERE comic_id = ? AND status = 'queued' AND origin = 'subscription'").all(comicId);
-    if (!policy.enabled) return { queue: [], cancel: cancel.map(task => task.id) };
+    if (!policy.enabled) return { queue: [], cancel: cancel.map(task => task.id), unknown: 0 };
     const wanted = comics.items(comicId).filter(item => policy.types.includes(item.type) && (policy.strategy === 'backfill' || item.first_seen_at > policy.createdAt));
     const wantedIds = new Set(wanted.map(item => item.id));
     const states = comics.states(comicId, policy.targetId, policy.format);
@@ -50,13 +51,14 @@ export class SubscriptionService {
        AND t.id = (SELECT MAX(id) FROM tasks WHERE item_id = t.item_id AND target_id = t.target_id AND format = t.format)`).all(comicId, policy.targetId, policy.format).map(row => [row.item_id, row.status]));
     const queue = wanted.filter(item => {
       const state = states[item.remote_id]?.state ?? 'missing';
-      if (state === 'downloaded' || state === 'queued' || state === 'running') return false;
+      if (state === 'downloaded' || state === 'unknown' || state === 'queued' || state === 'running') return false;
       const last = latest.get(item.id);
       return last !== 'cancelled' && (includeFailed || last !== 'failed');
     });
     return {
       queue,
       cancel: cancel.filter(task => !wantedIds.has(task.item_id) || task.target_id !== policy.targetId || task.format !== policy.format).map(task => task.id),
+      unknown: wanted.filter(item => states[item.remote_id]?.state === 'unknown').length,
     };
   }
 
@@ -68,7 +70,7 @@ export class SubscriptionService {
     const { id } = await this.deps.comics.sync(key);
     const existing = this.get(id);
     const plan = this.plan(id, this.policyOf(input, existing), true);
-    return { queue: plan.queue.length, cancel: plan.cancel.length, sizeMB: Math.round(plan.queue.reduce((sum, item) => sum + itemSize(item, input.format), 0) * 10) / 10 };
+    return { queue: plan.queue.length, cancel: plan.cancel.length, sizeMB: Math.round(plan.queue.reduce((sum, item) => sum + itemSize(item, input.format), 0) * 10) / 10, unknown: plan.unknown };
   }
 
   get(comicId: number): Subscription | null {

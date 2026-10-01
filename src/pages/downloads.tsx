@@ -66,7 +66,7 @@ export function DownloadsPage() {
       {!!counts?.failed && <Button variant={phone ? 'ghost' : 'outline'} size="sm" aria-disabled={retryFailed.isPending} onClick={() => { if (!retryFailed.isPending) retryFailed.mutate(); }}>
         <RotateCcw data-icon="inline-start" /><span className="max-md:sr-only">重试全部失败</span><span className="text-muted-foreground tabular-nums">{counts.failed}</span>
       </Button>}
-      {!!(counts?.completed || counts?.cancelled) && <ConfirmAction title="清除已完成的记录？" description="只清除列表里的记录，书库中的文件不受影响。" action="清除" onConfirm={() => clearFinished.mutate()}>
+      {!!counts?.completed && <ConfirmAction title="清除已完成的记录？" description="只清除列表里的记录，书库中的文件不受影响。" action="清除" onConfirm={() => clearFinished.mutate()}>
         <Button variant="ghost" size={phone ? 'icon-sm' : 'sm'} aria-label="清除已完成" className="text-muted-foreground"><Trash2 data-icon="inline-start" />{!phone && '清除已完成'}</Button>
       </ConfirmAction>}
     </PageHeader>
