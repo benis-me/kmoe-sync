@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import type { LibraryFolder, LibraryOverview, Task } from '@shared/model';
 import { createApp } from '../server/app';
 import { resetKmoeThrottle } from '../server/kmoe/client';
-import { canonicalTitle, folderKeywords, opfIds, similarity, titleHint } from '../server/services/library';
+import { canonicalTitle, similarity } from '../server/metadata/text';
+import { folderKeywords, opfIds, titleHint } from '../server/services/library';
 import { FAKE_PASSWORD, startFakeKmoe } from './fake-kmoe';
 
 describe('title helpers', () => {
@@ -205,6 +206,18 @@ describe('following the imported library', () => {
   }, 30_000);
 });
 
+describe('Simplified folder names', () => {
+  test('a folder named in Simplified Chinese is linked to the Traditional Kmoe title without asking', async () => {
+    book('简体/间谍家家酒', '间谍家家酒-卷 01.epub');
+    const simplified = (await api('POST', '/api/targets', { kind: 'local', name: '简体', path: '/简体', rule: '{title}/{filename}' })).data.id as number;
+    await api('POST', '/api/library/scan', { targetId: simplified, match: true });
+    const data = await until(() => api<LibraryOverview>('GET', `/api/library?targetId=${simplified}`).then(r => r.data), value => !value.job.running);
+    expect(folderAt(data, '/间谍家家酒').kmoe).toMatchObject({ state: 'matched', score: 1, comic: { key: 'c9d0e1' } });
+    expect((await api('DELETE', `/api/targets/${simplified}`)).status).toBe(200);
+    rmSync(join(library, '简体'), { recursive: true, force: true });
+  }, 30_000);
+});
+
 describe('matching by the Kmoe ids in the files', () => {
   test('EPUBs name their comic, so only folders whose ids settle nothing need a search', async () => {
     mkdirSync(join(library, '第二书库'), { recursive: true });
@@ -290,5 +303,23 @@ describe('network outage', () => {
     expect(status.queue.reason).toBe('network');
     const task = (await tasksOf('c9d0e1')).find(item => item.itemId === '5002')!;
     expect(task).toMatchObject({ status: 'queued', errorCode: 'kmoe_network' });
+  }, 30_000);
+});
+
+describe('the daily scan of libraries Komga reads', () => {
+  test('finds folders put there by other means; only new or changed folders are written to Komga again', async () => {
+    const dirty = (path: string) => app.db.query<{ dirty: number }, [number, string]>(
+      'SELECT m.dirty FROM folder_metadata m JOIN library_folders f ON f.id = m.folder_id WHERE f.target_id = ? AND f.path = ?').get(targetId, path)?.dirty;
+    app.db.run('UPDATE folder_metadata SET dirty = 0'); // as if the metadata tick had written everything
+    app.library.scanStale([targetId]); // scanned by the tests above: not due
+    expect(app.jobs.busy).toBe(false);
+    book('别处拷来的', '别处拷来的 01.epub');
+    book('迷宮飯 (完全版)', '[Kmoe][迷宮飯]卷02.epub');
+    app.db.run('UPDATE settings SET value = ? WHERE key = ?', [JSON.stringify(new Date(Date.now() - 25 * 3_600_000).toISOString()), `libraryScan:${targetId}`]);
+    app.library.scanStale([9999, targetId]); // a deleted target still bound in the Komga settings is passed over
+    const data = await until(overview, value => !value.job.running);
+    expect(data.job).toMatchObject({ kind: 'scan', error: null });
+    expect(folderAt(data, '/别处拷来的')).toMatchObject({ books: 1, kmoe: { state: 'pending' } });
+    expect([dirty('/别处拷来的'), dirty('/迷宮飯 (完全版)'), dirty('/葬送的芙莉蓮')]).toEqual([1, 1, 0]);
   }, 30_000);
 });

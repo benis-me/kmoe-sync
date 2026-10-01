@@ -5,7 +5,7 @@ import type { BangumiSubject } from '@shared/model';
 import { VERSION } from '../config';
 import { now, type DB } from '../db';
 import { AppError } from '../http/errors';
-import { isRetryable, transient, transientStatus } from '../lib/retry';
+import { connectionProblem, isRetryable, transient, transientStatus } from '../lib/retry';
 
 export interface BgmInfobox { key: string; value: string | { k?: string; v?: string }[] }
 export interface BgmSubject {
@@ -128,18 +128,6 @@ export class BangumiClient implements BangumiApi {
 }
 
 // ---------- Network ----------
-/** Why a connection failed, in words a user can act on (poisoned DNS shows up as a certificate mismatch or a timeout). */
-export function connectionProblem(error: unknown): string {
-  const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
-  const text = `${error instanceof Error ? `${error.name} ${error.message}` : String(error)} ${code}`;
-  if (/timeout|timed out/i.test(text)) return '连接超时';
-  if (/cert|tls|ssl|altname|handshake/i.test(text)) return '证书不匹配，域名解析可能被污染';
-  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|dns/i.test(text)) return '域名解析失败';
-  if (/refused/i.test(text)) return '连接被拒绝';
-  if (/reset|closed|socket|ECONNRESET/i.test(text)) return '连接被重置';
-  return '网络不通';
-}
-
 /** A failed connection to Bangumi: transient, never the raw "Unable to connect…". */
 export function unreachable(error: unknown): AppError {
   return transient(new AppError(502, 'bangumi_unreachable',

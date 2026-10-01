@@ -293,6 +293,8 @@ export function createApp(config: Config, options: AppOptions = {}) {
       // which resume the queue and log in again. Library hydrating waits for it, so bulk Kmoe work stays one page per 10 s.
       void subscriptions.checkDue().catch(error => console.error('[subscriptions]', error));
       if (!subscriptions.checking) await library.tick();
+      const { enabled, komga } = metadata.settings();
+      if (enabled) library.scanStale(komga.libraries.map(entry => entry.targetId));
       // A first metadata sync can take minutes at Bangumi's rate limit: never hold up subscription checks for it
       // (the metadata tick prevents its own overlap).
       void metadata.tick().catch(error => console.error('[metadata]', error));

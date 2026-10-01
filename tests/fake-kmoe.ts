@@ -1,6 +1,7 @@
 // A fake Kmoe mirror with the same routes and payload shapes as the real site, for tests and `bun run dev:fake`.
 // Login with any email and the password "kmoe-test". Control endpoints under /__fake/ inject failures and new volumes.
 import { deflateRawSync } from 'node:zlib';
+import { fold } from '../server/metadata/text';
 
 export const FAKE_PASSWORD = 'kmoe-test';
 
@@ -126,7 +127,8 @@ export function startFakeKmoe(options: { port?: number; hostname?: string; fileS
         if (control.deflect > 0) { control.deflect--; return new Response(null, { status: 302, headers: { Location: 'https://www.google.com/' } }); }
         const query = list ? decodeURIComponent(list[1]!) : url.searchParams.get('s') ?? '';
         const pageNumber = list ? Number(list[2]) : 1;
-        const hits = comics.filter(comic => !query.trim() || comic.title.includes(query) || comic.authors.some(author => author.includes(query)) || query === '*');
+        // Like Kmoe, a Simplified query finds the Traditional title.
+        const hits = comics.filter(comic => !query.trim() || fold(comic.title).includes(fold(query)) || comic.authors.some(author => author.includes(query)) || query === '*');
         const perPage = 2, total = Math.max(1, Math.ceil(hits.length / perPage));
         const calls = hits.slice((pageNumber - 1) * perPage, pageNumber * perPage).map((comic, index) =>
           `disp_divinfo( "div_${index}", "${origin}/c/${comic.key}.htm", "${origin}/cover/${comic.key}.jpg", "0", "0", "0", "", "", "9.1", "${comic.title}", "${comic.authors.join(',')}", "${comic.volumes.at(-1)?.name}", "2026-09-20" );`).join('\n');

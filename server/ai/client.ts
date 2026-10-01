@@ -2,7 +2,7 @@
 // JSON), streamed replies with tool calls, the model list, and token accounting. Failures come back as readable AppErrors.
 import type { ChatMessage, ChatToolCall } from '@shared/model';
 import { AppError } from '../http/errors';
-import { connectionProblem } from '../metadata/bangumi';
+import { connectionProblem } from '../lib/retry';
 
 export interface Endpoint { baseUrl: string; apiKey: string; model: string }
 export interface ToolSpec { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }

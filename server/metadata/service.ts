@@ -11,7 +11,7 @@ import { json, now, type DB } from '../db';
 import type { EventHub } from '../events';
 import { AppError } from '../http/errors';
 import { sameOrigin, type Sealer } from '../lib/crypto';
-import { errorMessage, isRetryable, transient } from '../lib/retry';
+import { connectionProblem, errorMessage, isRetryable, transient } from '../lib/retry';
 import type { ActivityLog } from '../services/activity';
 import type { ComicService, ItemRow } from '../services/comics';
 import type { JobRunner } from '../services/jobs';
@@ -22,7 +22,7 @@ import type { TargetService } from '../services/targets';
 import { VERSION } from '../config';
 import { proxied, proxyUrl } from '../lib/proxy';
 import {
-  BangumiClient, CACHE_DAYS, connectionProblem, creators, probeOnline, subjectDto, subjectIdOf, type BangumiApi, type BgmSubject,
+  BangumiClient, CACHE_DAYS, creators, probeOnline, subjectDto, subjectIdOf, type BangumiApi, type BgmSubject,
 } from './bangumi';
 import { LATEST_URL } from './dump';
 import { below, KomgaClient, komgaUrl, plainPath, type KomgaConfig, type KomgaLink, type KomgaSeries } from './komga';

@@ -9,6 +9,7 @@ import { AppError } from '../http/errors';
 import { kmoeThrottle } from '../kmoe/client';
 import { KmoeError } from '../kmoe/errors';
 import { errorMessage, isRetryable } from '../lib/retry';
+import { canonicalTitle, fold, similarity } from '../metadata/text';
 import { inspectLibrary } from '../storage';
 import { StorageError } from '../storage/types';
 import type { MetadataService } from '../metadata/service';
@@ -33,25 +34,9 @@ const MAX_DEPTH = 3;
  * redirects clients that go faster to a search engine for over an hour (a burst of ~120 requests in 80 s did it).
  */
 export const BULK_PACE_MS = 10_000;
+const DAY_MS = 86_400_000;
 
 // ---------- Title helpers (pure, exported for tests) ----------
-/** Comparable form of a title: width/case folded, spaces/punctuation/symbols dropped, common variant characters unified. */
-export const canonicalTitle = (text: string) => text.normalize('NFKC').toLowerCase()
-  .replace(/[\s\p{P}\p{S}]/gu, '').replace(/[話话]/g, '话').replace(/[巻卷]/g, '卷');
-
-/** Levenshtein similarity of two canonical titles, 0–1. */
-export function similarity(a: string, b: string): number {
-  const x = [...canonicalTitle(a)], y = [...canonicalTitle(b)];
-  if (!x.length || !y.length) return 0;
-  let previous = Array.from({ length: y.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= x.length; i++) {
-    const current = [i];
-    for (let j = 1; j <= y.length; j++) current[j] = Math.min(previous[j]! + 1, current[j - 1]! + 1, previous[j - 1]! + (x[i - 1] === y[j - 1] ? 0 : 1));
-    previous = current;
-  }
-  return 1 - previous[y.length]! / Math.max(x.length, y.length);
-}
-
 const BRANDED = /^\[(?:kmoe|mox|kox|koz|kzo|kxo|kxx|kzz|vol\.moe)[^\]]*\]\[([^\]]+)\]/i;
 const SUFFIXED = /^(.+?)\s*[-_]\s*(?:卷|巻|話|话|番外|第|vol\b|v\d)/i;
 /** The title the files were named after: "[Kmoe][X]卷01.epub" or "X-卷 01.epub" (majority vote). */
@@ -182,8 +167,12 @@ export class LibraryService {
       komga: { disabled: 0, pending: 0, not_found: 0, synced: 0, error: 0 },
     };
     for (const folder of folders) { counts.kmoe[folder.kmoe.state]++; counts.bangumi[folder.metadata.bangumi.state]++; counts.komga[folder.metadata.komga.state]++; }
+    return { targetId, scannedAt: this.scannedAt(targetId), job: this.deps.jobs.current(), counts, folders, follow: this.unfollowed(targetId).length };
+  }
+
+  private scannedAt(targetId: number): string | null {
     const scanned = this.deps.db.query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?').get(`libraryScan:${targetId}`);
-    return { targetId, scannedAt: scanned ? json<string | null>(scanned.value, null) : null, job: this.deps.jobs.current(), counts, folders, follow: this.unfollowed(targetId).length };
+    return scanned ? json<string | null>(scanned.value, null) : null;
   }
 
   private touched(row: FolderRow) {
@@ -429,6 +418,7 @@ export class LibraryService {
     };
     await walk('/', 0);
     const time = now();
+    const before = new Map(db.query<{ path: string; books: number }, [number]>('SELECT path, books FROM library_folders WHERE target_id = ?').all(targetId).map(row => [row.path, row.books]));
     const upsert = db.query(`INSERT INTO library_folders (target_id, path, name, books, format, sample, hint, scanned_at, created_at, updated_at)
       VALUES ($target, $path, $name, $books, $format, $sample, $hint, $now, $now, $now)
       ON CONFLICT (target_id, path) DO UPDATE SET name = excluded.name, books = excluded.books, format = excluded.format, sample = excluded.sample,
@@ -454,7 +444,10 @@ export class LibraryService {
       }
     })();
     db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', [`libraryScan:${targetId}`, JSON.stringify(time)]);
-    for (const row of db.query<{ id: number }, [number]>('SELECT id FROM library_folders WHERE target_id = ?').all(targetId)) this.deps.metadata.markDirty(row.id);
+    // New folders and ones whose books changed get their metadata written; the rest are as Komga already has them.
+    for (const row of db.query<{ id: number; path: string; books: number }, [number]>('SELECT id, path, books FROM library_folders WHERE target_id = ?').all(targetId)) {
+      if (before.get(row.path) !== row.books) this.deps.metadata.markDirty(row.id);
+    }
     this.deps.hub.emit({ type: 'folders', targetId });
     this.deps.hub.emit({ type: 'shelf' });
     return found.size;
@@ -502,10 +495,11 @@ export class LibraryService {
       if (position) await sleep(this.pace, context.signal);
       const result = await this.kmoeCall(context, row.path, () => this.deps.comics.search(keyword, 1));
       for (const hit of result.results) {
-        const score = Math.max(...keywords.map(word => similarity(hit.title, word)));
+        // Folded: a Simplified folder name scores 1 against the Traditional Kmoe title.
+        const score = Math.max(...keywords.map(word => similarity(fold(hit.title), fold(word))));
         const previous = candidates.get(hit.key);
         if (!previous || previous.score < score) candidates.set(hit.key, { key: hit.key, title: hit.title, authors: hit.authors, cover: hit.cover, latest: hit.latest, score: Math.round(score * 1000) / 1000 });
-        if (!exact && keywords.some(word => canonicalTitle(word) === canonicalTitle(hit.title))) exact = hit.key;
+        if (!exact && keywords.some(word => fold(word) === fold(hit.title))) exact = hit.key;
       }
       if (exact) break;
     }
@@ -719,6 +713,16 @@ export class LibraryService {
       context.progress({ done: rows.length, current: null });
       this.deps.activity.add({ kind: 'info', level: failed ? 'warning' : 'success', title: `追更：订阅了 ${rows.length - failed} 部连载（仅追新）${failed ? `，失败 ${failed} 部` : ''}` });
     });
+  }
+
+  /**
+   * Scheduler hook: a library Komga reads is scanned once a day, so series put there by other means (copied in, another
+   * downloader) are found and the metadata tick matches and writes them. A scan asks Kmoe nothing.
+   */
+  scanStale(targetIds: number[]) {
+    if (this.deps.jobs.busy) return;
+    const stale = targetIds.find(id => this.deps.targets.exists(id) && !(Date.now() - Date.parse(this.scannedAt(id) ?? '') < DAY_MS));
+    if (stale !== undefined) this.scan(stale, false);
   }
 
   /**

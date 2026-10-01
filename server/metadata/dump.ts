@@ -5,8 +5,8 @@ import { open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { VERSION } from '../config';
 import { AppError } from '../http/errors';
-import { transient } from '../lib/retry';
-import { connectionProblem, sleep } from './bangumi';
+import { connectionProblem, transient } from '../lib/retry';
+import { sleep } from './bangumi';
 
 export const LATEST_URL = 'https://raw.githubusercontent.com/bangumi/Archive/master/aux/latest.json';
 export interface Dump { name: string; url: string; size: number; sha256: string; createdAt: string | null }

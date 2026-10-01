@@ -1,7 +1,23 @@
-// Text helpers for Bangumi matching: fold Traditional/Japanese character forms to Simplified, compare titles,
+// Text helpers for matching titles on Kmoe and Bangumi: fold Traditional/Japanese character forms to Simplified, compare titles,
 // and read volume numbers from Komga file names, Kmoe item names and Bangumi volume names.
-import { canonicalTitle, similarity } from '../services/library';
 import { JAPANESE, TRADITIONAL } from './chars';
+
+/** Comparable form of a title: width/case folded, spaces/punctuation/symbols dropped, common variant characters unified. */
+export const canonicalTitle = (text: string) => text.normalize('NFKC').toLowerCase()
+  .replace(/[\s\p{P}\p{S}]/gu, '').replace(/[話话]/g, '话').replace(/[巻卷]/g, '卷');
+
+/** Levenshtein similarity of two canonical titles, 0–1. */
+export function similarity(a: string, b: string): number {
+  const x = [...canonicalTitle(a)], y = [...canonicalTitle(b)];
+  if (!x.length || !y.length) return 0;
+  let previous = Array.from({ length: y.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= x.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= y.length; j++) current[j] = Math.min(previous[j]! + 1, current[j - 1]! + 1, previous[j - 1]! + (x[i - 1] === y[j - 1] ? 0 : 1));
+    previous = current;
+  }
+  return 1 - previous[y.length]! / Math.max(x.length, y.length);
+}
 
 const FOLD = new Map<string, string>();
 for (const table of [TRADITIONAL, JAPANESE]) {

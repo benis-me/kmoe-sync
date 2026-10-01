@@ -25,11 +25,19 @@ export function isLocalHost(hostname: string): boolean {
   return host === '::1' || /^f[cd][0-9a-f]{2}:/.test(host) || host.startsWith('fe80:');
 }
 
-/** fetch through `proxy()` when one is set (read on every call, so settings changes apply at once); LAN hosts go direct. */
+/**
+ * fetch through `proxy()` when one is set (read on every call, so settings changes apply at once); LAN hosts go direct.
+ * Through a proxy a site that cannot be reached comes back as a response (502), so a failed connection is the proxy's:
+ * it is thrown as a ProxyError (same code, still retryable) and reported as such instead of blaming the site.
+ */
 export function proxied(fetchImpl: typeof fetch, proxy: () => string): typeof fetch {
   return ((input: string | URL | Request, init?: BunFetchRequestInit) => {
     const via = proxy();
     const host = new URL(input instanceof Request ? input.url : String(input)).hostname;
-    return fetchImpl(input, via && !isLocalHost(host) ? { ...init, proxy: via } : init);
+    if (!via || isLocalHost(host)) return fetchImpl(input, init);
+    return fetchImpl(input, { ...init, proxy: via }).catch((error: unknown) => {
+      if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) throw error;
+      throw Object.assign(new Error(`代理 ${via} 不可达`, { cause: error }), { name: 'ProxyError', code: (error as { code?: unknown } | null)?.code });
+    });
   }) as typeof fetch;
 }

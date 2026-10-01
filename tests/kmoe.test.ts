@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
 import { KmoeClient, kmoeBudget, kmoeThrottle, persistKmoeThrottle, resetKmoeThrottle, type ThrottleState } from '../server/kmoe/client';
 import { KmoeError } from '../server/kmoe/errors';
+import { proxied } from '../server/lib/proxy';
 import { javascriptCalls, keyFromUrl, parseAccount, parseDetailPage, parseDownloadLink, parseSearchPage, parseVolumeData } from '../server/kmoe/parser';
 import { KmoeSite } from '../server/kmoe/site';
 import { FAKE_PASSWORD, startFakeKmoe } from './fake-kmoe';
@@ -190,5 +191,22 @@ describe('dropped connections', () => {
     Object.assign(state, { drop: 1, connections: 0 });
     expect(await code(client.post('/login_act.php', { form: { email: 'reader@example.com', passwd: 'secret' } }))).toBe('network');
     expect(state.connections).toBe(1);
+  });
+});
+
+describe('through a proxy', () => {
+  it('a proxy that is down is named as the problem, not Kmoe; Kmoe unreachable behind it is a response', async () => {
+    const dead = createServer();
+    await new Promise<void>(resolve => dead.listen(0, '127.0.0.1', resolve));
+    const port = (dead.address() as AddressInfo).port;
+    dead.close();
+    const client = new KmoeClient({ origin: 'https://kzo.example', interval: 0, fetch: proxied(fetch, () => `http://127.0.0.1:${port}`) });
+    expect(await client.get('/').catch((error: unknown) => error)).toMatchObject({ code: 'network', message: '无法连接 kzo.example（代理不可达）' });
+    // The proxy is up and answers for a site it cannot reach: that is not the proxy's fault.
+    const gateway = createServer(socket => socket.once('data', () => socket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n')));
+    await new Promise<void>(resolve => gateway.listen(0, '127.0.0.1', resolve));
+    const response = await proxied(fetch, () => `http://127.0.0.1:${(gateway.address() as AddressInfo).port}`)('http://kzo.example/');
+    expect(response.status).toBe(502);
+    gateway.close();
   });
 });

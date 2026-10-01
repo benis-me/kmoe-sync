@@ -1,6 +1,6 @@
 // HTTP client for one Kmoe mirror: cookie jar, polite rate limiting, manual redirects (to see login redirects and
 // every Set-Cookie) and the same request headers the site's own web client sends.
-import { connectionProblem } from '../metadata/bangumi';
+import { connectionProblem } from '../lib/retry';
 import { KmoeError, offline } from './errors';
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
