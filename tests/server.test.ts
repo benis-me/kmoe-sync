@@ -364,6 +364,23 @@ describe('WebDAV target', () => {
     // Subscribed targets cannot be deleted; unused ones can.
     expect((await api('DELETE', `/api/targets/${targetId}`)).status).toBe(200);
   });
+
+  test('an upload that fails is sent again from the staged file, not downloaded again', async () => {
+    const targetId = (await api('POST', '/api/targets', { kind: 'webdav', name: 'Flaky WebDAV', url: dav.url, username: 'nas', password: 'dav-secret', path: '/Comics', rule: '{title}/{filename}' })).data.id;
+    const files = async () => (await (await fetch(`${fake.origin}/__fake/state`)).json() as { fileRequests: number }).fileRequests;
+    const before = await files();
+    let failed = false;
+    dav.state.override = req => { if (req.method === 'PUT' && !failed) { failed = true; return new Response('busy', { status: 500 }); } };
+    try {
+      await api('POST', '/api/tasks', { comicKey: 'c9d0e1', itemIds: ['5003'], format: 'epub', targetId });
+      const task = (await until(() => tasksOf('c9d0e1'), list => settled(list.filter(item => item.itemId === '5003')))).find(item => item.itemId === '5003')!;
+      expect(task).toMatchObject({ status: 'completed', attempt: 1 });
+      expect(failed).toBe(true);
+      expect(await files() - before).toBe(1);
+      expect(dav.tree.get('/dav/Comics/間諜家家酒/[Kmoe][間諜家家酒]卷03.epub')).toMatchObject({ dir: false });
+    } finally { dav.state.override = undefined; }
+    expect((await api('DELETE', `/api/targets/${targetId}`)).status).toBe(200);
+  });
 });
 
 describe('external API and MCP', () => {

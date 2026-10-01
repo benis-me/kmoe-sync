@@ -8,7 +8,7 @@ import type { EventHub } from '../events';
 import { AppError } from '../http/errors';
 import { kmoeThrottle } from '../kmoe/client';
 import { KmoeError } from '../kmoe/errors';
-import { errorMessage } from '../lib/retry';
+import { errorMessage, isRetryable } from '../lib/retry';
 import { inspectLibrary } from '../storage';
 import { StorageError } from '../storage/types';
 import type { MetadataService } from '../metadata/service';
@@ -300,6 +300,7 @@ export class LibraryService {
     const comic = this.deps.comics.byId(row.comic_id);
     await this.deps.comics.sync(comic.key);
     await this.check(row.comic_id, row.target_id, this.formatOf(row));
+    this.deps.db.run('UPDATE library_folders SET kmoe_error = NULL WHERE id = ?', [row.id]);
   }
 
   // ---------- Linking ----------
@@ -323,8 +324,9 @@ export class LibraryService {
     return this.folder(id);
   }
 
+  /** Not a change to the folder: updated_at (and the shelf order that follows it) stays. */
   private fail(row: FolderRow, error: unknown) {
-    this.deps.db.run('UPDATE library_folders SET kmoe_error = ?, updated_at = ? WHERE id = ?', [errorMessage(error), now(), row.id]);
+    this.deps.db.run('UPDATE library_folders SET kmoe_error = ? WHERE id = ?', [errorMessage(error), row.id]);
   }
 
   ignore(id: number): LibraryFolder {
@@ -707,12 +709,19 @@ export class LibraryService {
     });
   }
 
-  /** Scheduler hook: quietly finish linked folders that still lack Kmoe details or a library check (a few per minute). */
+  /**
+   * Scheduler hook: quietly finish linked folders that still lack Kmoe details or a library check, one a minute. A folder
+   * that failed (gone from Kmoe, unreadable) is left to the user instead of holding up the rest; Kmoe or the network being
+   * down is not the folder's fault, so that one is tried again next minute.
+   */
   async tick() {
     if (this.deps.jobs.busy || kmoeThrottle() || this.deps.kmoe.account().state !== 'active') return;
-    for (const row of this.unhydrated().slice(0, 2)) {
-      await this.hydrate(row).catch(error => this.fail(row, error));
-      this.touched(row);
+    const row = this.unhydrated().find(folder => !folder.kmoe_error);
+    if (!row) return;
+    try { await this.hydrate(row); } catch (error) {
+      if (isRetryable(error)) return;
+      this.fail(row, error);
     }
+    this.touched(row);
   }
 }

@@ -67,12 +67,26 @@ function deflected(host: string): KmoeError {
 /** Tests: shorten cooldowns (scale) and forget earlier blocks. */
 export function resetKmoeThrottle(scale = 1) { Object.assign(throttle, { until: 0, strikes: 0, last: 0, host: '', scale }); }
 
-/** Serialises requests across all clients so the site sees at most one request per `interval`. */
+/**
+ * Whoever asks (pages, the API, MCP, the assistant, bulk jobs), the site sees at most `perMinute` requests in any minute:
+ * about a third of the rate that got the home IP blocked for hours (~90 a minute). Tests change it.
+ */
+export const kmoeBudget = { perMinute: 25, windowMs: 60_000 };
+const recent: number[] = [];
+
+/** Serialises requests across all clients: at most one per `interval`, and within the budget (when `interval` > 0). */
 async function politely(interval: number) {
   const turn = gate.then(async () => {
-    const wait = lastRequestAt + interval - Date.now();
-    if (wait > 0) await Bun.sleep(wait);
+    for (;;) {
+      const time = Date.now();
+      while (recent.length && time - recent[0]! >= kmoeBudget.windowMs) recent.shift();
+      const full = interval > 0 && recent.length >= kmoeBudget.perMinute;
+      const wait = Math.max(lastRequestAt + interval - time, full ? recent[0]! + kmoeBudget.windowMs - time : 0);
+      if (wait <= 0) break;
+      await Bun.sleep(wait);
+    }
     lastRequestAt = Date.now();
+    recent.push(lastRequestAt);
   });
   gate = turn.catch(() => {});
   await turn;

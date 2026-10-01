@@ -263,6 +263,24 @@ describe('upgrade from before folders were tracked', () => {
   });
 });
 
+describe('background hydrating', () => {
+  test('folders whose comic is gone from Kmoe are marked once and skipped: the ones after them are not held up', async () => {
+    const time = '2020-01-01T00:00:00.000Z';
+    // Two at the front of the queue (lowest ids), both gone from Kmoe; 葬送的芙莉蓮's folder lost its library check.
+    for (const id of [-2, -1]) {
+      const comic = Number(app.db.run('INSERT INTO comics (key, title, created_at, updated_at) VALUES (?, ?, ?, ?)', [`gone${-id}`, `已下架 ${-id}`, time, time]).lastInsertRowid);
+      app.db.run("INSERT INTO library_folders (id, target_id, path, name, comic_id, kmoe_state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'matched', ?, ?)", [id, targetId, `/已下架 ${-id}`, `已下架 ${-id}`, comic, time, time]);
+    }
+    const frieren = app.comics.find('f7e2c9')!.id;
+    app.db.run('DELETE FROM library_checks WHERE comic_id = ? AND target_id = ?', [frieren, targetId]);
+    for (let i = 0; i < 3; i++) await app.library.tick();
+    const gone = app.db.query<{ kmoe_error: string | null; updated_at: string }, []>('SELECT kmoe_error, updated_at FROM library_folders WHERE id < 0').all();
+    expect(gone.every(row => row.kmoe_error && row.updated_at === time)).toBe(true);
+    expect(app.db.query('SELECT 1 FROM library_checks WHERE comic_id = ? AND target_id = ?').get(frieren, targetId)).not.toBeNull();
+    app.db.run('DELETE FROM library_folders WHERE id < 0');
+  }, 30_000);
+});
+
 describe('network outage', () => {
   test('a lost connection pauses the queue instead of failing the task', async () => {
     await api('PATCH', '/api/settings', { autoRetry: false });

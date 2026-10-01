@@ -66,7 +66,7 @@ const page = (title: string, body: string, script = '') =>
 export function startFakeKmoe(options: { port?: number; hostname?: string; fileScale?: number } = {}) {
   const comics = catalog();
   const control: Control = { dropDownloads: 0, quotaExhausted: false, rate: 0, expired: false, deflect: 0, loginCode: '' };
-  let searches = 0;
+  let searches = 0, fileRequests = 0;
   const sessions = new Map<string, { email: string | null }>();
   const hashes = new Map<string, string>();
   let usedMB = 1024;
@@ -102,7 +102,7 @@ export function startFakeKmoe(options: { port?: number; hostname?: string; fileS
           comic.volumes.push(volume);
           return Response.json(volume);
         }
-        if (path === '/__fake/state') return Response.json({ control, usedMB, sessions: sessions.size, searches });
+        if (path === '/__fake/state') return Response.json({ control, usedMB, sessions: sessions.size, searches, fileRequests });
       }
 
       if (path === '/' ) return html(page('Kmoe', `<form action="${origin}/list.php" method="get"><input name="s"></form>`));
@@ -173,8 +173,11 @@ export function startFakeKmoe(options: { port?: number; hostname?: string; fileS
         if (!comic || !volume) return new Response('gone', { status: 404 });
         const size = Math.round((file[3] === 'epub' ? volume.epubMB : volume.mobiMB) * 1024 * 1024 * scale) + 256;
         const bytes = file[3] === 'epub' ? fakeEpub(size, `${comic.title} ${volume.name}`) : fakeMobi(size);
+        fileRequests++;
         const range = /^bytes=(\d+)-$/.exec(req.headers.get('range') ?? '');
-        const start = range ? Math.min(Number(range[1]), bytes.length) : 0;
+        // Like a CDN: a resume from the end (or beyond) of the file is not satisfiable.
+        if (range && Number(range[1]) >= bytes.length) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${bytes.length}` } });
+        const start = range ? Number(range[1]) : 0;
         const slice = bytes.subarray(start);
         const drop = control.dropDownloads > 0;
         if (drop) control.dropDownloads--;

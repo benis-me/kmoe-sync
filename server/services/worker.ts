@@ -43,6 +43,11 @@ export async function isTruncatedZip(path: string): Promise<boolean> {
   return tail.lastIndexOf(Buffer.from('PK\x05\x06', 'latin1')) < 0;
 }
 
+/** A staged file that passes the checks made before uploading: the right kind of file, and (EPUB) not cut off. */
+async function whole(path: string, format: Format): Promise<boolean> {
+  return !checkSignature(new Uint8Array(await Bun.file(path).slice(0, 68).arrayBuffer()), format) && !(format === 'epub' && await isTruncatedZip(path));
+}
+
 interface Running { controller: AbortController; loaded: number; speed: number; lastAt: number; lastLoaded: number; persistedAt: number }
 
 export class Worker {
@@ -110,8 +115,9 @@ export class Worker {
     while (this.running.size < limit) {
       const busy = [...this.running.keys()];
       const row = db.query<TaskRow, (string | number)[]>(`SELECT * FROM tasks WHERE status = 'queued' AND (retry_at IS NULL OR retry_at <= ?)
-        ${busy.length ? `AND id NOT IN (${busy.map(() => '?').join(',')})` : ''} ORDER BY retry_at IS NOT NULL, id LIMIT 1`).get(now(), ...busy);
+        ${busy.length ? `AND id NOT IN (${busy.map(() => '?').join(',')})` : ''} ORDER BY retry_at IS NOT NULL, origin = 'subscription', id LIMIT 1`).get(now(), ...busy);
       if (!row) return;
+      // What the user picked (or an API call asked for) goes before subscription backfill: the quota goes to it first.
       // Claim atomically: another instance on the same data must not start the same task.
       const claimed = db.run("UPDATE tasks SET status = 'running', phase = 'resolving', retry_at = NULL, started_at = COALESCE(started_at, ?), speed = 0 WHERE id = ? AND status = 'queued'", [now(), row.id]);
       if (!claimed.changes) continue;
@@ -172,25 +178,33 @@ export class Worker {
     const scratch = this.deps.tmpDir;
     const part = join(scratch, `task-${task.id}.part`);
     try {
-      this.guardQuota(item, task.format);
-      await this.ensureSpace(itemSize(item, task.format));
-      let link = this.links.get(task.id);
-      if (!link) {
-        link = await kmoe.withSession(site => site.downloadLink({ key: comic.key, bookId: comic.book_id ?? '', itemId: item.remote_id, format: task.format, line: task.line }));
-        this.links.set(task.id, link);
+      // The whole file is staged already (its upload failed, or a restart came while it uploaded): it goes up again as it
+      // is, instead of asking Kmoe for it again (a new link, a resume Kmoe refuses, then the whole transfer).
+      // (The size alone is not enough: without a Content-Length the recorded total is what arrived before a cut.)
+      const staged = task.total !== null && task.path !== null && await stat(part).then(info => info.size === task.total, () => false) && await whole(part, task.format);
+      let relative = staged ? task.path!.replace(/^\//, '') : '';
+      let download = { size: task.total ?? 0 };
+      if (!staged) {
+        this.guardQuota(item, task.format);
+        await this.ensureSpace(itemSize(item, task.format));
+        let link = this.links.get(task.id);
+        if (!link) {
+          link = await kmoe.withSession(site => site.downloadLink({ key: comic.key, bookId: comic.book_id ?? '', itemId: item.remote_id, format: task.format, line: task.line }));
+          this.links.set(task.id, link);
+        }
+        signal.throwIfAborted();
+        mkdirSync(scratch, { recursive: true });
+        this.phase(task.id, 'downloading');
+        const name = link.name;
+        download = await this.download(link.url, part, signal, (header) => {
+          const info = fileInfo(name, header, comic.title, item.name, task.format);
+          relative = renderRule(target.rule, { title: comic.title, filename: info.stem, bookname: item.name, author: json(comic.authors, []), ext: info.ext });
+          // A comic mapped to (or already living in) a folder keeps its files there; the rule only names the file.
+          const folder = this.deps.library.folderFor(comic.id, task.target_id);
+          if (folder) relative = joinPath(folder.path, relative.split('/').at(-1)!);
+          this.phase(task.id, 'downloading', { path: joinPath('/', relative) });
+        }, (loaded, total) => this.progress(task.id, entry, loaded, total));
       }
-      signal.throwIfAborted();
-      mkdirSync(scratch, { recursive: true });
-      this.phase(task.id, 'downloading');
-      let relative = '';
-      const download = await this.download(link.url, part, signal, (header) => {
-        const info = fileInfo(link.name, header, comic.title, item.name, task.format);
-        relative = renderRule(target.rule, { title: comic.title, filename: info.stem, bookname: item.name, author: json(comic.authors, []), ext: info.ext });
-        // A comic mapped to (or already living in) a folder keeps its files there; the rule only names the file.
-        const folder = this.deps.library.folderFor(comic.id, task.target_id);
-        if (folder) relative = joinPath(folder.path, relative.split('/').at(-1)!);
-        this.phase(task.id, 'downloading', { path: joinPath('/', relative) });
-      }, (loaded, total) => this.progress(task.id, entry, loaded, total));
 
       this.phase(task.id, 'verifying');
       const head = new Uint8Array(await Bun.file(part).slice(0, 68).arrayBuffer());

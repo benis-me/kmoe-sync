@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
-import { KmoeClient, kmoeThrottle, persistKmoeThrottle, resetKmoeThrottle, type ThrottleState } from '../server/kmoe/client';
+import { KmoeClient, kmoeBudget, kmoeThrottle, persistKmoeThrottle, resetKmoeThrottle, type ThrottleState } from '../server/kmoe/client';
 import { KmoeError } from '../server/kmoe/errors';
 import { javascriptCalls, keyFromUrl, parseAccount, parseDetailPage, parseDownloadLink, parseSearchPage, parseVolumeData } from '../server/kmoe/parser';
 import { KmoeSite } from '../server/kmoe/site';
@@ -63,6 +63,19 @@ describe('site operations against the fake mirror', () => {
   beforeAll(() => { fake = startFakeKmoe({ port: 0 }); });
   afterAll(() => fake.stop());
   const site = () => new KmoeSite(new KmoeClient({ origin: fake.origin, interval: 0 }), TRUSTED);
+
+  it('within a minute (here 400 ms) only so many requests go out; the next waits until the oldest leaves the window', async () => {
+    const saved = { ...kmoeBudget };
+    Object.assign(kmoeBudget, { perMinute: 3, windowMs: 400 });
+    try {
+      const client = new KmoeClient({ origin: fake.origin, interval: 1 });
+      const started = Date.now();
+      const times: number[] = [];
+      for (let i = 0; i < 4; i++) { await client.get('/'); times.push(Date.now() - started); }
+      expect(times[2]!).toBeLessThan(300);
+      expect(times[3]!).toBeGreaterThanOrEqual(390);
+    } finally { Object.assign(kmoeBudget, saved); }
+  });
 
   it('a redirect to a search engine is Kmoe throttling: every request pauses until the cooldown ends', async () => {
     resetKmoeThrottle(1 / 6000); // 30 min → 300 ms
