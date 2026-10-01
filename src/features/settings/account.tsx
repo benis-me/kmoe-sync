@@ -173,7 +173,7 @@ function AutoLoginRow({ account }: { account: KmoeAccount }) {
     onSuccess: kmoe => { setAccount(kmoe); toast.success('已关闭自动重新登录', { description: '保存的密码已删除。' }); },
   });
   return <>
-    <SettingRow label="自动重新登录" htmlFor="kmoe-auto-login" description="登录失效时，用加密保存在这台 NAS 上的密码重新登录。Kmoe 拒绝时会删除密码并通知你。">
+    <SettingRow label="自动重新登录" htmlFor="kmoe-auto-login" description="失效时用加密保存的密码重新登录，被拒绝则删除密码并通知你。">
       <Switch id="kmoe-auto-login" checked={account.remember} aria-disabled={forget.isPending || undefined}
         onCheckedChange={on => { if (forget.isPending) return; if (on) setAsking(true); else forget.mutate(); }} />
     </SettingRow>
@@ -227,7 +227,7 @@ export function AccountSection() {
   return <>
     {account.state === 'active' ? <AccountCard account={account} reserveMB={settings.data.quotaReserveMB} /> : <LoginForm account={account} mirror={settings.data.preferredMirror} />}
     {account.state === 'active' && <Card className="gap-0 divide-y py-0">
-      <SettingRow label="镜像" htmlFor="preferred-mirror" description="访问 Kmoe 使用的域名，连不上时换一个试试。切换时带上现在的登录，新镜像不认就保持不变。">
+      <SettingRow label="镜像" htmlFor="preferred-mirror" description="切换时带上现在的登录，新镜像不认就保持原样。">
         {/* The mirror the session uses; while a switch is being checked, the one it goes to. */}
         <MirrorSelect id="preferred-mirror" value={(patch.isPending && patch.variables?.preferredMirror) || account.mirror || settings.data.preferredMirror} busy={patch.isPending}
           onChange={mirror => patch.mutate({ preferredMirror: mirror }, { onSuccess: () => void toast.success(`已切换到 ${mirror}`, { description: '登录状态一起带过去了，不用重新登录。' }) })} />

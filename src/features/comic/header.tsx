@@ -33,8 +33,8 @@ export function ComicHeader({ detail, kmoeUrl, refreshing, onRefresh, titleRef }
         {comic.status && <Badge variant="muted">{comic.status}</Badge>}
         {comic.latest && <Badge variant="outline" className="text-muted-foreground">最新 {comic.latest}</Badge>}
         <a href="#subscription" className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <Badge variant={subscription?.enabled ? 'success' : 'outline'} className={cn(!subscription?.enabled && 'text-muted-foreground')}>
-            <Dot tone={subscription?.enabled ? 'success' : 'muted'} className="size-1.5" />
+          <Badge variant="outline" className={cn(!subscription?.enabled && 'text-muted-foreground')}>
+            <Dot tone={subscription?.enabled ? 'ink' : 'muted'} className="size-1.5" />
             {subscription ? subscription.enabled ? '追更中' : '追更已暂停' : '未订阅'}
           </Badge>
         </a>

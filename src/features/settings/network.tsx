@@ -67,12 +67,12 @@ function ProxyForm({ settings }: { settings: Settings }) {
           onChange={e => { setDraft(old => ({ ...old, proxy: e.target.value })); setError(''); }} />
         {error ? <FieldMessage id="proxy-error">{error}</FieldMessage>
           : <p id="proxy-hint" className="text-xs leading-relaxed text-muted-foreground">
-            HTTP 代理（Clash、Surge 等的 HTTP 端口），留空表示直连。填 NAS 或电脑的局域网地址——容器里的 127.0.0.1 指的是容器自己。群晖等系统设置里的代理不会传给 Docker 容器，需要在这里填写。
+            留空表示直连。填局域网地址（容器里的 127.0.0.1 是容器自己）；群晖等系统里设的代理不会传给容器。
           </p>}
       </Field>
     </div>
     <SettingRow label="Kmoe 也走代理" htmlFor="proxy-kmoe" className="border-t sm:px-6"
-      description="一般直连即可。打开后 Kmoe 的页面和下载都经过代理，会占用代理的流量。">
+      description="打开后 Kmoe 的页面和下载都走代理，占用代理的流量。">
       <Switch id="proxy-kmoe" checked={draft.proxyKmoe} onCheckedChange={proxyKmoe => setDraft(old => ({ ...old, proxyKmoe }))} />
     </SettingRow>
     <div className="flex flex-col gap-3 border-t px-5 py-4 sm:px-6">

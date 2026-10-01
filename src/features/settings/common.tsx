@@ -52,10 +52,10 @@ export function usePatchMetadata() {
   });
 }
 
-/** "正在保存… / 已保存" beside a card title for settings that save themselves. */
+/** "正在保存… / 已保存" beside a card title for settings that save themselves (nothing while idle). */
 export function SaveHint({ pending, saved }: { pending: boolean; saved: boolean }) {
   return <span role="status" className="flex h-5 items-center gap-1 text-xs text-muted-foreground">
-    {pending ? <><LoaderCircle className="size-3.5 animate-spin" />正在保存…</> : saved ? <><Check className="size-3.5 animate-pop text-success" />已保存</> : '更改会自动保存'}
+    {pending ? <><LoaderCircle className="size-3.5 animate-spin" />正在保存…</> : saved ? <><Check className="size-3.5 animate-pop text-success" />已保存</> : null}
   </span>;
 }
 

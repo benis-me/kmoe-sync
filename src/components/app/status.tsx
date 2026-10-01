@@ -14,9 +14,9 @@ export function throttledMinutes(kmoe: KmoeAccount): number | null {
   return left > 0 ? Math.max(1, Math.ceil(left / 60_000)) : null;
 }
 
-export function Dot({ tone, className }: { tone: 'success' | 'warning' | 'destructive' | 'muted' | 'seal'; className?: string }) {
+export function Dot({ tone, className }: { tone: 'success' | 'warning' | 'destructive' | 'muted' | 'seal' | 'ink'; className?: string }) {
   return <span aria-hidden className={cn('size-2 shrink-0 rounded-full', {
-    success: 'bg-success', warning: 'bg-warning', destructive: 'bg-destructive', muted: 'bg-muted-foreground/45', seal: 'bg-seal',
+    success: 'bg-success', warning: 'bg-warning', destructive: 'bg-destructive', muted: 'bg-muted-foreground/45', seal: 'bg-seal', ink: 'bg-foreground/70',
   }[tone], className)} />;
 }
 

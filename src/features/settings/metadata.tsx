@@ -91,10 +91,7 @@ function ConnectionCard({ settings, targets }: { settings: MetadataSettings; tar
 
   return <form noValidate onSubmit={submit} aria-label="Komga 连接" className="overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
     <div className="flex flex-col gap-6 p-5 sm:p-6">
-      <div className="flex flex-col gap-1">
-        <h3 className="text-[15px] font-semibold tracking-tight">Komga 连接</h3>
-        <p className="text-xs leading-relaxed text-muted-foreground">Kmoe Sync 通过 Komga 的接口写入元数据，不会改动书库里的文件。</p>
-      </div>
+      <h3 className="text-[15px] font-semibold tracking-tight">Komga 连接</h3>
       <Field className="gap-2">
         <FieldLabel htmlFor="komga-url">Komga 地址</FieldLabel>
         <Input id="komga-url" inputMode="url" className="font-mono md:text-[13px]" placeholder="http://nas.local:25600" autoCapitalize="none" spellCheck={false}
@@ -132,7 +129,7 @@ function ConnectionCard({ settings, targets }: { settings: MetadataSettings; tar
       <div className="flex flex-col gap-2.5">
         <div className="flex flex-col gap-0.5">
           <span className="text-sm font-medium">对应的 Komga 库</span>
-          <p className="text-xs leading-relaxed text-muted-foreground">Komga 里显示同一个目录的库。没有对应的存储位置不会同步。</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">没选库的存储位置不会同步。</p>
         </div>
         <ul className="flex flex-col divide-y rounded-xl ring-1 ring-border">
           {targets.map(target => {
@@ -187,13 +184,8 @@ function TagLimit({ value, onSave }: { value: number; onSave: (limit: number) =>
 }
 
 /** Komga's reading directions (its own names), and what each means here. */
-const DIRECTIONS: [MetadataOptions['readingDirection'], string, string][] = [
-  ['auto', '按作品判断', '日漫从右到左，其他作品保留 Komga 里的设置。'],
-  ['WEBTOON', 'Webtoon', '竖向连续滚动，适合条漫和在手机上读。'],
-  ['RIGHT_TO_LEFT', '从右到左', '日漫的翻页方向。'],
-  ['LEFT_TO_RIGHT', '从左到右', '国漫、欧美漫画常见的翻页方向。'],
-  ['VERTICAL', '垂直', '竖向一页一页地翻。'],
-  ['keep', '不修改', '不写入，保留 Komga 里的设置。'],
+const DIRECTIONS: [MetadataOptions['readingDirection'], string][] = [
+  ['auto', '按作品判断'], ['WEBTOON', 'Webtoon'], ['RIGHT_TO_LEFT', '从右到左'], ['LEFT_TO_RIGHT', '从左到右'], ['VERTICAL', '垂直'], ['keep', '不修改'],
 ];
 
 function OptionsCard({ options, bangumi }: { options: MetadataOptions; bangumi: MetadataSettings['bangumi'] }) {
@@ -205,18 +197,18 @@ function OptionsCard({ options, bangumi }: { options: MetadataOptions; bangumi: 
     <div className="flex items-start justify-between gap-4 px-5 pt-4 pb-3">
       <div className="flex flex-col gap-0.5">
         <h3 className="text-[15px] font-semibold tracking-tight">写入内容</h3>
-        <p className="text-xs text-muted-foreground">简介、状态、出版社和标签总会写入；下面这些可以调整。</p>
+        <p className="text-xs text-muted-foreground">简介、状态、出版社和标签总会写入。</p>
       </div>
       <SaveHint pending={patch.isPending} saved={patch.isSuccess} />
     </div>
-    <SettingRow label="标题语言" labelId="meta-title-label" description="系列标题用 Bangumi 的中文名（没有时用原名），或一律用原名。">
+    <SettingRow label="标题语言" labelId="meta-title-label" description="没有中文名时用原名。">
       <ToggleGroup type="single" variant="segmented" aria-labelledby="meta-title-label" value={options.titleLanguage} onValueChange={value => value && save({ titleLanguage: value as MetadataOptions['titleLanguage'] })}>
         <ToggleGroupItem value="cn" className="px-3.5">中文名</ToggleGroupItem>
         <ToggleGroupItem value="original" className="px-3.5">原名</ToggleGroupItem>
       </ToggleGroup>
     </SettingRow>
     <SettingRow label="阅读方向" htmlFor="meta-direction"
-      description={`Komga 阅读器打开系列时的翻页方式：${DIRECTIONS.find(([value]) => value === options.readingDirection)?.[2] ?? ''}改动在各系列下次同步时写入（例如下载了新卷）；要让已同步的也马上改，在书库整理点「同步到 Komga」。`}>
+      description={`${options.readingDirection === 'auto' ? '日漫从右到左，其他保留 Komga 的设置；' : ''}下次同步时写入，要马上生效就在书库整理点「同步到 Komga」。`}>
       <Select value={options.readingDirection} onValueChange={value => save({ readingDirection: value as MetadataOptions['readingDirection'] })}>
         <SelectTrigger id="meta-direction" className="w-full sm:w-40"><SelectValue /></SelectTrigger>
         <SelectContent position="popper" align="end">
@@ -224,23 +216,23 @@ function OptionsCard({ options, bangumi }: { options: MetadataOptions; bangumi: 
         </SelectContent>
       </Select>
     </SettingRow>
-    <SettingRow label="写入单册信息" htmlFor="meta-books" description="每一卷的卷号、发售日期、ISBN 和作者。">
+    <SettingRow label="写入单册信息" htmlFor="meta-books">
       <Switch id="meta-books" checked={options.books} onCheckedChange={books => save({ books })} />
     </SettingRow>
-    <SettingRow label="封面" labelId="meta-posters-label" description={noCovers ? '用 Bangumi 的封面替换 Komga 里的封面。离线数据没有封面图，只在在线查询时替换。' : '用 Bangumi 的封面替换 Komga 里的封面。'}>
+    <SettingRow label="封面" labelId="meta-posters-label" description={noCovers ? '离线数据没有封面图，只在在线查询时替换。' : undefined}>
       <ToggleGroup type="single" variant="segmented" aria-labelledby="meta-posters-label" value={options.posters} onValueChange={value => value && save({ posters: value as MetadataOptions['posters'] })}>
         <ToggleGroupItem value="off" className="px-3">不替换</ToggleGroupItem>
         <ToggleGroupItem value="series" className="px-3">仅系列</ToggleGroupItem>
         <ToggleGroupItem value="all" className="px-3">系列和单册</ToggleGroupItem>
       </ToggleGroup>
     </SettingRow>
-    <SettingRow label="锁定已写入字段" htmlFor="meta-lock" description="Komga 自己刷新元数据时，保留这里写入的内容。">
+    <SettingRow label="锁定已写入字段" htmlFor="meta-lock" description="Komga 自己刷新时保留这里写入的内容。">
       <Switch id="meta-lock" checked={options.lock} onCheckedChange={lock => save({ lock })} />
     </SettingRow>
-    <SettingRow label="下载后自动同步" htmlFor="meta-auto" description="新卷下载完成或导入文件夹后，自动匹配 Bangumi 并写入 Komga。">
+    <SettingRow label="下载后自动同步" htmlFor="meta-auto">
       <Switch id="meta-auto" checked={options.autoSync} onCheckedChange={autoSync => save({ autoSync })} />
     </SettingRow>
-    <SettingRow label="标签数量" htmlFor="meta-tags" description="最多写入几个 Bangumi 标签（按标注人数），0 表示不写标签。">
+    <SettingRow label="标签数量" htmlFor="meta-tags" description="按标注人数取前几个，0 表示不写。">
       <TagLimit value={options.tagLimit} onSave={tagLimit => save({ tagLimit })} />
     </SettingRow>
   </Card>;
@@ -259,7 +251,7 @@ export function MetadataSection() {
   const s = settings.data;
   return <>
     <Card className="gap-0 py-0">
-      <SettingRow label="启用 Komga 元数据" htmlFor="metadata-enabled" description="把 Bangumi 的简介、标签和单册信息写入 Komga，可以代替 BangumiKomga。关闭时不会匹配 Bangumi，也不会改动 Komga。">
+      <SettingRow label="启用 Komga 元数据" htmlFor="metadata-enabled" description="把 Bangumi 的简介、标签和单册信息写入 Komga。">
         <Switch id="metadata-enabled" checked={s.enabled} onCheckedChange={enabled => patch.mutate({ enabled }, { onSuccess: next => void toast.success(next.enabled ? '已开启 Komga 元数据' : '已关闭 Komga 元数据') })} />
       </SettingRow>
       {s.enabled && (!s.komga.url || !s.komga.libraries.length) && <p className="border-t px-5 py-3 text-xs text-warning">

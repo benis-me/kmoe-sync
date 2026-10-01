@@ -109,11 +109,11 @@ function AiForm({ ai, proxy }: { ai: AiSettings; proxy: string }) {
       </div>
     </div>
     <SettingRow label="走网络代理" htmlFor="ai-proxy" className="border-t sm:px-6"
-      description={proxy ? <>通过 <span className="font-mono">{proxy}</span> 访问 AI 服务。国外的服务需要打开。</> : <>还没有设置代理，可以在<Link to="/settings/$section" params={{ section: 'network' }} className="mx-0.5 text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">网络代理</Link>里填写。</>}>
+      description={proxy ? <>通过 <span className="font-mono">{proxy}</span> 访问，国外的服务需要打开。</> : <>还没有设置代理，可以在<Link to="/settings/$section" params={{ section: 'network' }} className="mx-0.5 text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">网络代理</Link>里填写。</>}>
       <Switch id="ai-proxy" checked={draft.useProxy} onCheckedChange={useProxy => set('useProxy', useProxy)} />
     </SettingRow>
     <SettingRow label="每月上限" htmlFor="ai-monthlyTokens" className="border-t sm:px-6"
-      description={<span id="ai-limit-hint">本月已用 {formatTokens(ai.usage.tokens)} token。到上限后 AI 功能暂停到下个月，留空表示不限。{error.monthlyTokens && <span className="text-destructive"> {error.monthlyTokens}</span>}</span>}>
+      description={<span id="ai-limit-hint">本月已用 {formatTokens(ai.usage.tokens)} token，到上限后暂停到下个月。{error.monthlyTokens && <span className="text-destructive"> {error.monthlyTokens}</span>}</span>}>
       <Input id="ai-monthlyTokens" inputMode="numeric" className="w-36 text-right tabular-nums" placeholder="不限" aria-describedby="ai-limit-hint" aria-invalid={!!error.monthlyTokens}
         value={draft.monthlyTokens} onChange={e => set('monthlyTokens', e.target.value.replace(/[^\d]/g, ''))} />
     </SettingRow>

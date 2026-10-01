@@ -22,7 +22,7 @@ const tab = 'relative z-10 flex h-10 items-center px-1 text-sm font-medium text-
 export function DiscoverLayout() {
   const { pathname } = useLocation();
   return <Page>
-    <PageHeader title="发现" description="搜索 Kmoe、粘贴漫画链接，或者从 Bangumi 书单里挑。" />
+    <PageHeader title="发现" />
     <nav aria-label="发现" className="relative -mt-1 flex gap-6 border-b md:-mt-3">
       <Link to="/discover" activeOptions={{ exact: true, includeSearch: false }} className={tab}>搜索</Link>
       <Link to="/discover/bangumi" activeOptions={{ includeSearch: false }} className={tab}>Bangumi 书单</Link>
@@ -87,7 +87,7 @@ export function SearchPage() {
         <InputGroupAddon className="pl-4">{link ? <Link2 className="size-5" /> : <Search className="size-5" />}</InputGroupAddon>
         <InputGroupInput id="discover-search" type="search" autoFocus={!q} aria-label="搜索 Kmoe 或粘贴漫画链接" placeholder="书名、作者，或粘贴 Kmoe 漫画链接"
           className="text-base md:text-[15px]" value={text} onChange={e => { setText(e.target.value); setError(''); }}
-          aria-invalid={!!error} aria-describedby={error ? 'discover-error' : 'discover-hint'} />
+          aria-invalid={!!error} aria-describedby={error ? 'discover-error' : link ? 'discover-hint' : undefined} />
         <InputGroupAddon align="inline-end" className="pr-2">
           <InputGroupButton type="submit" variant="default" size="sm" className="h-8 rounded-lg px-3.5" aria-disabled={resolve.isPending}>
             {resolve.isPending ? <LoaderCircle className="animate-spin" /> : link ? <ArrowRight /> : null}{link ? '打开' : '搜索'}
@@ -95,14 +95,14 @@ export function SearchPage() {
         </InputGroupAddon>
       </InputGroup>
       {error ? <FieldMessage id="discover-error">{error}</FieldMessage>
-        : <p id="discover-hint" className="px-1 text-xs text-muted-foreground">{link ? '识别为 Kmoe 链接，会直接打开漫画页。' : '支持桌面版、手机版和各个镜像的漫画页链接。'}</p>}
+        : link && <p id="discover-hint" className="px-1 text-xs text-muted-foreground">识别为 Kmoe 链接，会直接打开漫画页。</p>}
     </form>
 
     {kmoe && kmoe !== 'active' ? <EmptyState icon={<KeyRound />} title={kmoe === 'expired' ? 'Kmoe 登录已失效' : '搜索需要先登录 Kmoe'}
       description="登录后就能搜索 Kmoe。粘贴漫画链接不受影响，可以直接打开。" className="border">
       <Button asChild><Link to="/settings/$section" params={{ section: 'account' }}>{kmoe === 'expired' ? '重新登录' : '登录 Kmoe'}</Link></Button>
     </EmptyState>
-      : !q ? <EmptyState icon={<Search />} title="搜索 Kmoe" description="输入书名或作者；在 Kmoe 上看到想要的漫画，也可以直接把链接粘贴进来。" className="min-h-64" />
+      : !q ? <EmptyState icon={<Search />} title="搜索 Kmoe" className="min-h-64" />
       : results.error ? <ErrorState error={results.error} onRetry={() => void results.refetch()} title="搜索失败" />
       : !data ? <Loading label="正在搜索…">
         <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-x-5 gap-y-7 max-sm:grid-cols-3 max-sm:gap-x-3">

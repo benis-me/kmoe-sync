@@ -7,11 +7,12 @@ import { useMediaQuery } from '@/lib/hooks';
 export const TopBarActions = createContext<HTMLElement | null>(null);
 
 /** Page column. On phones the top bar already names the page, so the heading block is for screen readers only. */
-// The bottom padding keeps the end of a page clear of the floating AI 助手 button.
-export function Page({ children, className, width = 'default' }: { children: ReactNode; className?: string; width?: 'default' | 'narrow' | 'wide' }) {
+// The bottom padding keeps the end of a page clear of the floating AI 助手 button. Every page starts at the same left
+// edge (not centred), so switching pages never shifts the content sideways; narrower pages leave room on the right.
+export function Page({ children, className, width = 'default' }: { children: ReactNode; className?: string; width?: 'default' | 'wide' }) {
   return <div className={cn(
-    'mx-auto flex w-full flex-col gap-6 px-4 pt-4 pb-16 md:gap-8 md:px-8 md:pt-9 md:pb-20 lg:px-10',
-    width === 'narrow' ? 'max-w-3xl' : width === 'wide' ? 'max-w-7xl' : 'max-w-6xl',
+    'flex w-full flex-col gap-6 px-4 pt-4 pb-16 md:gap-8 md:px-8 md:pt-9 md:pb-20 lg:px-10',
+    width === 'wide' ? 'max-w-7xl' : 'max-w-6xl',
     className,
   )}>{children}</div>;
 }

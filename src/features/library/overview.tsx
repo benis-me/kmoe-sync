@@ -138,7 +138,7 @@ export function LibraryIntro({ target, kmoeActive, jobs }: { target: Target; kmo
         <p className="text-sm leading-relaxed text-pretty text-muted-foreground">扫描「{target.name}」，把里面的漫画文件夹关联到 Kmoe 上的作品。</p>
       </div>
       <ul className="flex flex-col gap-2 text-sm">
-        {points.map(point => <li key={point} className="flex items-start gap-2.5"><Check aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />{point}</li>)}
+        {points.map(point => <li key={point} className="flex items-start gap-2.5"><Check aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{point}</li>)}
       </ul>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Button variant="seal" size="lg" aria-disabled={!!jobs.running || busy} onClick={() => { if (!jobs.running && !busy) jobs.start('scan'); }}>

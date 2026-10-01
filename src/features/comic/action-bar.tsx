@@ -69,9 +69,10 @@ export function ActionBar({ count, sizeMB, remainingMB, reserveMB, reason, busy,
               : <span className="truncate">剩余额度 {formatMB(remainingMB - sizeMB)}</span>}
           </div> : count > 0 && reason && !busy && <span aria-hidden className="truncate text-xs text-muted-foreground sm:hidden">{reason}</span>}
         </div>
-        {reason && !busy && <span id="start-reason" className="max-w-40 text-right text-xs text-muted-foreground max-sm:hidden">{reason}</span>}
+        {/* Nothing picked is said on the left already. */}
+        {count > 0 && reason && !busy && <span id="start-reason" className="max-w-40 text-right text-xs text-muted-foreground max-sm:hidden">{reason}</span>}
         {/* aria-disabled, not disabled: it stays focusable (with its reason) and keeps focus while adding. */}
-        <Button variant="seal" size="lg" className="shrink-0 sm:min-w-34" aria-disabled={!!reason || busy} aria-describedby={reason ? 'start-reason' : undefined}
+        <Button variant="seal" size="lg" className="shrink-0 sm:min-w-34" aria-disabled={!!reason || busy} aria-describedby={count > 0 && reason ? 'start-reason' : undefined}
           onClick={() => { if (!reason && !busy) onStart(); }}>
           {busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Download data-icon="inline-start" />}
           {busy ? '添加中…' : '开始下载'}

@@ -69,7 +69,7 @@ function ArchivePanel({ archive }: { archive: BangumiArchiveStatus }) {
     <div className="flex items-start justify-between gap-3">
       <div className="flex min-w-0 flex-col gap-0.5">
         <h4 id="archive-title" className="text-sm font-medium">离线数据</h4>
-        <p className="text-xs leading-relaxed text-muted-foreground">Bangumi 每周在 GitHub 发布的全站导出，只导入其中的漫画和书籍。</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">每周在 GitHub 发布的全站导出，只导入漫画和书籍。</p>
       </div>
       <Badge variant={badge.variant} className="shrink-0">{busy && <LoaderCircle className="animate-spin" />}{badge.label}</Badge>
     </div>
@@ -168,10 +168,7 @@ export function BangumiSourceCard({ bangumi }: { bangumi: MetadataSettings['bang
 
   return <form id="bangumi-source" noValidate onSubmit={submit} aria-labelledby="bangumi-source-title" className="scroll-mt-20 overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
     <div className="flex flex-col gap-4 p-5 sm:p-6">
-      <div className="flex flex-col gap-1">
-        <h3 id="bangumi-source-title" className="text-[15px] font-semibold tracking-tight">Bangumi 数据来源</h3>
-        <p className="text-xs leading-relaxed text-muted-foreground">匹配条目、读取简介和标签时，从哪里取 Bangumi 的数据。</p>
-      </div>
+      <h3 id="bangumi-source-title" className="text-[15px] font-semibold tracking-tight">Bangumi 数据来源</h3>
       <div className="flex flex-col gap-2">
         <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar">
           <ToggleGroup type="single" variant="segmented" aria-label="数据来源" value={draft.source} onValueChange={value => value && set('source', value as BangumiSource)}>

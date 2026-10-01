@@ -115,7 +115,7 @@ function KomgaLine({ folder }: { folder: LibraryFolder }) {
     <Dot tone="warning" className="size-1.5" /><span className="truncate">未找到系列</span>
   </span>;
   if (status === 'pending') return <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground"><Dot tone="muted" className="size-1.5" />待同步</span>;
-  const text = <><Dot tone="success" className="size-1.5" /><span className="truncate">已同步{syncedAt && ` · ${fromNow(syncedAt)}`}</span></>;
+  const text = <><Dot tone="muted" className="size-1.5" /><span className="truncate">已同步{syncedAt && ` · ${fromNow(syncedAt)}`}</span></>;
   return seriesUrl ? <a href={seriesUrl} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1.5 rounded-sm outline-none hover:underline hover:decoration-foreground/30 hover:underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring">
     {text}<ArrowUpRight aria-hidden className="size-3 shrink-0 text-muted-foreground" />
   </a> : <span className="flex min-w-0 items-center gap-1.5">{text}</span>;

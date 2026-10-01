@@ -11,7 +11,7 @@ import { Dot } from '@/components/app/status';
 export const ComicCard = memo(function ComicCard({ entry, index }: { entry: ShelfEntry; index: number }) {
   const { comic, subscription, counts } = entry;
   const complete = counts.items > 0 && counts.downloaded >= counts.items;
-  const state = subscription ? subscription.enabled ? { tone: 'success' as const, text: '追更中' } : { tone: 'muted' as const, text: '追更已暂停' }
+  const state = subscription ? subscription.enabled ? { tone: 'ink' as const, text: '追更中' } : { tone: 'muted' as const, text: '追更已暂停' }
     : complete ? { tone: 'muted' as const, text: '已全部下载' } : { tone: 'muted' as const, text: '未订阅' };
   // Metadata needing attention: a quiet mark, not a status of its own.
   const meta = entry.metadata;
@@ -32,7 +32,7 @@ export const ComicCard = memo(function ComicCard({ entry, index }: { entry: Shel
       <div className="flex items-center gap-2">
         <span className="sr-only">已下载 {counts.downloaded} 项，共 {counts.items} 项</span>
         <span aria-hidden className="h-1 flex-1 overflow-hidden rounded-full bg-foreground/8">
-          <span className={cn('block h-full rounded-full', complete ? 'bg-success' : 'bg-foreground/55')} style={{ width: `${percent(counts.downloaded, counts.items)}%` }} />
+          <span className="block h-full rounded-full bg-foreground/55" style={{ width: `${percent(counts.downloaded, counts.items)}%` }} />
         </span>
         <span aria-hidden className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{counts.downloaded}/{counts.items}</span>
       </div>

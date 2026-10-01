@@ -75,24 +75,24 @@ export function AutomationSection() {
   return <>
     <div className="-mt-3 flex justify-end"><SaveHint pending={patch.isPending} saved={patch.isSuccess} /></div>
     <Card className="gap-0 divide-y py-0">
-      <SettingRow label="检查更新" htmlFor="check-interval" description="多久检查一次追更中的漫画有没有新卷、新话。">
+      <SettingRow label="检查更新" htmlFor="check-interval">
         <Select value={String(s.checkIntervalHours)} onValueChange={value => save({ checkIntervalHours: Number(value) })}>
           <SelectTrigger id="check-interval" className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent position="popper"><SelectGroup>{INTERVALS.map(([hours, label]) => <SelectItem key={hours} value={String(hours)}>{label}</SelectItem>)}</SelectGroup></SelectContent>
         </Select>
       </SettingRow>
-      <SettingRow label="同时下载" labelId="concurrency-label" description="同时进行的下载任务数。NAS 性能或网络一般时，保持 1–2 个更稳。">
+      <SettingRow label="同时下载" labelId="concurrency-label">
         <ToggleGroup type="single" variant="segmented" aria-labelledby="concurrency-label" value={String(s.concurrency)} onValueChange={value => value && save({ concurrency: Number(value) })}>
           {[1, 2, 3, 4].map(n => <ToggleGroupItem key={n} value={String(n)} className="w-10 tabular-nums">{n}</ToggleGroupItem>)}
         </ToggleGroup>
       </SettingRow>
-      <SettingRow label="失败自动重试" htmlFor="auto-retry" description="网络中断、超时或服务器暂时不可用时自动重试；登录、额度、同名文件等错误不会重试。">
+      <SettingRow label="失败自动重试" htmlFor="auto-retry" description="登录、额度、同名文件等错误不会重试。">
         <Switch id="auto-retry" checked={s.autoRetry} onCheckedChange={autoRetry => save({ autoRetry })} />
       </SettingRow>
-      <SettingRow label="最多重试" labelId="retry-label" description="每个任务单独计算，间隔逐次加长。" className={cn('transition-opacity duration-200', !s.autoRetry && 'opacity-50')}>
+      <SettingRow label="最多重试" labelId="retry-label" className={cn('transition-opacity duration-200', !s.autoRetry && 'opacity-50')}>
         <RetryStepper value={s.maxRetries} disabled={!s.autoRetry} onChange={maxRetries => save({ maxRetries })} />
       </SettingRow>
-      <SettingRow label="保留额度" htmlFor="reserve" description={<span id="reserve-hint">剩余额度低于这个值时暂停队列，给手动下载留一点余量。{remaining !== null && `当前剩余 ${formatMB(remaining)}。`}</span>}>
+      <SettingRow label="保留额度" htmlFor="reserve" description={<span id="reserve-hint">剩余额度低于这个值时暂停队列{remaining !== null && `，当前剩余 ${formatMB(remaining)}`}。</span>}>
         <ReserveInput value={s.quotaReserveMB} onSave={quotaReserveMB => save({ quotaReserveMB })} />
       </SettingRow>
     </Card>
@@ -100,7 +100,6 @@ export function AutomationSection() {
     <Card className="gap-0 divide-y py-0">
       <div className="px-5 pt-4 pb-3">
         <h3 className="text-[15px] font-semibold tracking-tight">默认值</h3>
-        <p className="text-xs text-muted-foreground">新订阅和漫画页一开始使用的设置。</p>
       </div>
       <SettingRow label="格式" labelId="default-format-label">
         <ToggleGroup type="single" variant="segmented" aria-labelledby="default-format-label" value={s.defaultFormat} onValueChange={value => value && save({ defaultFormat: value as Format })}>

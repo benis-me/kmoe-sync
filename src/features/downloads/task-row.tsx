@@ -23,7 +23,7 @@ function TaskBadge({ task, className }: { task: Task; className?: string }) {
     : {
       queued: { variant: 'muted' as const, icon: Clock, label: '排队中' },
       running: { variant: 'secondary' as const, icon: LoaderCircle, label: task.phase ? PHASES[task.phase] : '下载中' },
-      completed: { variant: 'success' as const, icon: Check, label: '已完成' },
+      completed: { variant: 'muted' as const, icon: Check, label: '已完成' },
       failed: { variant: 'destructive' as const, icon: CircleAlert, label: '失败' },
       cancelled: { variant: 'muted' as const, icon: Ban, label: '已取消' },
     }[task.status];

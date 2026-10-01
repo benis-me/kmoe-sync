@@ -17,7 +17,7 @@ import { groupItems, isMissing, isSelectable, rowNeighbour, toggleAll, toggleRan
 const SEAL_CHECK = 'data-checked:border-seal data-checked:bg-seal data-checked:text-seal-foreground dark:data-checked:bg-seal data-indeterminate:border-seal data-indeterminate:bg-seal data-indeterminate:text-seal-foreground';
 
 const TAGS: Record<ItemState, { label: string; dot: string; text: string; reason: string }> = {
-  downloaded: { label: '已下载', dot: 'bg-success', text: 'text-success', reason: '已在保存位置找到' },
+  downloaded: { label: '已下载', dot: 'bg-foreground/60', text: 'text-muted-foreground', reason: '已在保存位置找到' },
   missing: { label: '未下载', dot: 'ring-1 ring-inset ring-muted-foreground/70', text: 'text-muted-foreground', reason: '保存位置里还没有这一项' },
   unknown: { label: '待确认', dot: 'bg-warning', text: 'text-warning', reason: '找到了文件，但无法确认是否完整' },
   failed: { label: '失败', dot: 'bg-destructive', text: 'text-destructive', reason: '上次下载失败' },
@@ -51,7 +51,7 @@ function StateTag({ id, state, info, task, open, onOpenChange }: { id: string; s
 }
 
 function StateIcon({ state, waiting, progress }: { state: ItemState; waiting: boolean; progress: number | null }) {
-  if (state === 'downloaded') return <CircleCheck aria-hidden className="mt-px size-[18px] shrink-0 text-success" />;
+  if (state === 'downloaded') return <CircleCheck aria-hidden className="mt-px size-[18px] shrink-0 text-foreground/60" />;
   if (state === 'queued') return waiting ? <RotateCcw aria-hidden className="mt-px size-4 shrink-0 text-warning" /> : <Clock aria-hidden className="mt-px size-4 shrink-0 text-muted-foreground" />;
   // Running: a ring that fills with the transfer.
   return <svg aria-hidden viewBox="0 0 20 20" className="mt-px size-[18px] shrink-0 -rotate-90">

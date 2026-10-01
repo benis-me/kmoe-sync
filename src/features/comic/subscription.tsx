@@ -21,11 +21,10 @@ import { Dot } from '@/components/app/status';
 type Draft = Required<SubscriptionInput>;
 const TYPES: ContentType[] = ['volume', 'extra', 'serial'];
 
-function Row({ label, htmlFor, children, hint }: { label: string; htmlFor?: string; children: ReactNode; hint?: string }) {
+function Row({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
   return <div className="flex flex-col gap-2">
     {htmlFor ? <label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">{label}</label> : <span aria-hidden className="text-xs font-medium text-muted-foreground">{label}</span>}
     {children}
-    {hint && <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>}
   </div>;
 }
 
@@ -91,9 +90,9 @@ export function SubscriptionCard({ detail, targets, settings, vip, remainingMB }
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <h2 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
           追更
-          {sub && <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground"><Dot tone={sub.enabled ? 'success' : 'muted'} className="size-1.5" />{sub.enabled ? '进行中' : '已暂停'}</span>}
+          {sub && <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground"><Dot tone={sub.enabled ? 'ink' : 'muted'} className="size-1.5" />{sub.enabled ? '进行中' : '已暂停'}</span>}
         </h2>
-        <p className="text-xs leading-relaxed text-muted-foreground">{sub ? '有新卷或新话时自动下载到书库。' : '订阅后，新卷或新话发布时会自动下载。'}</p>
+        {!sub && <p className="text-xs leading-relaxed text-muted-foreground">订阅后，新卷或新话发布时会自动下载。</p>}
       </div>
       {sub && <Switch aria-label="追更开关" checked={sub.enabled} disabled={save.isPending} onCheckedChange={enabled => save.mutate({ ...saved, enabled })} />}
     </div>
@@ -138,7 +137,7 @@ export function SubscriptionCard({ detail, targets, settings, vip, remainingMB }
         </Select>
       </Row>
 
-      <Row label={sub ? '缺失章节' : '订阅时'} hint={draft.strategy === 'future' ? '已有的章节保持原样，只下载之后发布的新章节。' : '把现在缺失的章节也一并加入下载队列。'}>
+      <Row label={sub ? '缺失章节' : '订阅时'}>
         <ToggleGroup type="single" variant="segmented" aria-label="订阅策略" className="w-full" value={draft.strategy} onValueChange={value => value && set('strategy', value as Draft['strategy'])}>
           <ToggleGroupItem value="backfill" className="flex-1">补齐缺失</ToggleGroupItem>
           <ToggleGroupItem value="future" className="flex-1">仅追新</ToggleGroupItem>

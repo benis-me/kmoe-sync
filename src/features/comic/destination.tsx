@@ -56,7 +56,7 @@ export function DestinationBar({ targets, target, directory, mapped, format, lin
           <span className="max-w-36 shrink-0 truncate font-medium">{target.name}</span>
           <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60" />
           <span title={directory} className="min-w-0 truncate font-mono text-[13px]">{middleTruncate(directory, 48)}</span>
-          {mapped && <Badge variant="success" className="max-md:hidden">已对应现有文件夹</Badge>}
+          {mapped && <Badge variant="secondary" className="max-md:hidden">已对应现有文件夹</Badge>}
           <span className="shrink-0 text-muted-foreground max-sm:hidden">· {FORMAT_LABELS[format]} · {LINE_LABELS[line]}</span>
         </> : <span className="text-muted-foreground">还没有存储位置</span>}
         <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-xs font-medium text-muted-foreground transition-colors duration-150 group-hover/dest:text-foreground">
@@ -96,7 +96,7 @@ export function DestinationBar({ targets, target, directory, mapped, format, lin
         </div>
         {target && <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2.5 border-t border-border/60 pt-4">
           <div className="flex min-w-0 flex-1 basis-60 flex-col gap-0.5">
-            <span className="flex items-center gap-2 text-sm font-medium">文件夹{mapped && <Badge variant="success" className="md:hidden">已对应现有文件夹</Badge>}</span>
+            <span className="flex items-center gap-2 text-sm font-medium">文件夹{mapped && <Badge variant="secondary" className="md:hidden">已对应现有文件夹</Badge>}</span>
             {/* In full: the bar above cuts it short (on phones, almost always). */}
             {directory && <span className="font-mono text-xs break-all">{directory}</span>}
             <span className="text-xs leading-relaxed text-muted-foreground">{mapped

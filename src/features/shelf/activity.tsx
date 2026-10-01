@@ -17,7 +17,7 @@ const ICONS: Record<Activity['kind'], LucideIcon> = {
   source_synced: ListChecks, info: Info,
 };
 const TONES: Record<Activity['level'], string> = {
-  info: 'bg-muted text-muted-foreground', success: 'bg-success-soft text-success', warning: 'bg-warning-soft text-warning', error: 'bg-destructive/10 text-destructive',
+  info: 'bg-muted text-muted-foreground', success: 'bg-muted text-foreground/70', warning: 'bg-warning-soft text-warning', error: 'bg-destructive/10 text-destructive',
 };
 
 function Entry({ activity, now }: { activity: Activity; now: number }) {

@@ -57,7 +57,7 @@ export function DownloadsPage() {
   const phone = !useMediaQuery('(min-width: 768px)');
 
   return <Page>
-    <PageHeader title="下载" description="下载队列：进行中、等待、失败和已完成的任务。">
+    <PageHeader title="下载">
       {/* While paused, the banner below explains why and offers the way back. */}
       {/* Phones show these in the top bar, as icons. */}
       {status && !paused && <Button variant={phone ? 'ghost' : 'outline'} size={phone ? 'icon-sm' : 'sm'} aria-label="暂停队列" aria-disabled={pause.isPending} onClick={() => { if (!pause.isPending) pause.mutate(); }}>

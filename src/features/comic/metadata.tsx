@@ -20,10 +20,7 @@ const link = 'rounded-sm font-medium text-foreground/80 underline decoration-for
 
 function Shell({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   return <Card id="metadata" className="scroll-mt-20 gap-0 py-0">
-    <div className="flex flex-col gap-0.5 px-5 pt-5">
-      <h2 className="text-[15px] font-semibold tracking-tight">元数据</h2>
-      <p className="text-xs leading-relaxed text-muted-foreground">Bangumi 的简介和标签，同步到 Komga。</p>
-    </div>
+    <h2 className="px-5 pt-5 text-[15px] font-semibold tracking-tight">元数据</h2>
     <div className="flex flex-col gap-4 px-5 pt-4 pb-5">{children}</div>
     {footer && <CardFooter className="flex-wrap gap-2 px-5 py-3.5">{footer}</CardFooter>}
   </Card>;
@@ -123,7 +120,7 @@ export function MetadataCard({ detail, settings }: { detail: ComicDetail; settin
           : komga.state === 'error' ? <span className="flex items-start gap-1.5 text-destructive"><Dot tone="destructive" className="mt-1 size-1.5" /><span className="min-w-0 break-words">同步失败：{komga.error ?? '未知错误'}</span></span>
           : komga.state === 'not_found' ? <span className="flex items-center gap-1.5 text-warning"><Dot tone="warning" className="size-1.5" />Komga 里还没有这个系列，先让 Komga 扫描书库</span>
           : komga.state === 'pending' ? <span className="flex items-center gap-1.5 text-muted-foreground"><Dot tone="muted" className="size-1.5" />{bangumi.state === 'matched' ? '待同步' : '选好 Bangumi 条目后同步'}</span>
-          : <span className="flex items-center gap-1.5"><Dot tone={komga.dirty ? 'muted' : 'success'} className="size-1.5" />
+          : <span className="flex items-center gap-1.5"><Dot tone="muted" className="size-1.5" />
             <span>{komga.dirty ? '有更新待同步' : '已同步'}{komga.syncedAt && <span className="text-muted-foreground tabular-nums"> · {fromNow(komga.syncedAt)}</span>}</span>
           </span>}
         {komga.seriesUrl && <a href={komga.seriesUrl} target="_blank" rel="noreferrer" className={cn(link, 'flex w-fit items-center gap-1')}>在 Komga 中打开<ArrowUpRight aria-hidden className="size-3" /></a>}
