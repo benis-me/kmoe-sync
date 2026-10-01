@@ -155,7 +155,7 @@ export function LibraryIntro({ target, kmoeActive, jobs }: { target: Target; kmo
 /** Link every confident suggestion at once (after a confirmation that says what happens). */
 export function AcceptSuggestions({ count, pending, onAccept }: { count: number; pending: boolean; onAccept: () => void }) {
   return <div className="flex animate-rise flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-dashed px-4 py-2.5">
-    <Sparkles aria-hidden className="size-4 shrink-0 text-seal" />
+    <Sparkles aria-hidden className="size-4 shrink-0 text-muted-foreground" />
     <span className="min-w-0 flex-1 text-sm">{count} 个建议的匹配度在 90% 以上，可以一次确认。</span>
     <ConfirmAction title={`接受 ${count} 个建议？`} description="这些文件夹会关联到各自的首选漫画，并出现在书架上。文件不会移动或改名，之后也可以重新匹配。"
       action={`接受 ${count} 个`} variant="default" onConfirm={onAccept}>

@@ -25,7 +25,7 @@ const components: Components = {
   blockquote: ({ children }) => <blockquote className="flex flex-col gap-2 border-l-2 border-seal/40 pl-3 text-muted-foreground">{children}</blockquote>,
   hr: () => <hr className="my-1 border-border" />,
   a: ({ href = '', children }) => href
-    ? <a href={href} className="font-medium text-seal underline decoration-seal/30 underline-offset-2 transition-colors duration-150 hover:decoration-seal"
+    ? <a href={href} className="font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors duration-150 hover:decoration-foreground"
       {...(inApp(href) ? {} : { target: '_blank', rel: 'noreferrer' })}>{children}</a>
     : <span>{children}</span>,
   img: ({ src, alt }) => typeof src === 'string' && inApp(src) ? <img src={src} alt={alt ?? ''} loading="lazy" className="max-h-48 rounded-md" /> : null,
@@ -33,7 +33,9 @@ const components: Components = {
   code: ({ children }) => <code className="rounded-[4px] bg-muted px-1 py-px font-mono text-[12px]">{children}</code>,
   table: ({ children }) => <div className="overflow-x-auto rounded-lg ring-1 ring-border"><table className="w-full border-collapse text-[12px]">{children}</table></div>,
   th: ({ style, children }) => <th style={style} className="bg-muted/50 px-2.5 py-1.5 text-left font-medium whitespace-nowrap">{children}</th>,
-  td: ({ style, children }) => <td style={style} className="border-t px-2.5 py-1.5 align-top">{children}</td>,
+  // Cells stay on one line (Chinese would otherwise break between any two characters) except the last, which wraps;
+  // a table wider than the panel scrolls.
+  td: ({ style, children }) => <td style={style} className="border-t px-2.5 py-1.5 align-top whitespace-nowrap last:whitespace-normal">{children}</td>,
 };
 
 export default function Markdown({ text, onNavigate }: { text: string; onNavigate?: () => void }) {

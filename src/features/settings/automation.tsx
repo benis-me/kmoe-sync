@@ -98,7 +98,7 @@ export function AutomationSection() {
     </Card>
 
     <Card className="gap-0 divide-y py-0">
-      <div className="px-5 pt-4 pb-3">
+      <div className="px-5 pt-4 pb-3 sm:px-6">
         <h3 className="text-[15px] font-semibold tracking-tight">默认值</h3>
       </div>
       <SettingRow label="格式" labelId="default-format-label">

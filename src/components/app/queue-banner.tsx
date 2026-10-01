@@ -45,7 +45,7 @@ export function QueueBanner({ status, reserveMB }: { status: Status; reserveMB?:
     {reason === 'quota' && <Button variant="outline" size="sm" asChild><Link to="/settings/$section" params={{ section: 'automation' }} hash="reserve">调整保留额度</Link></Button>}
     {reason === 'auth' && <Button variant="outline" size="sm" asChild><Link to="/settings/$section" params={{ section: 'account' }}>重新登录 Kmoe</Link></Button>}
     {aiReady && reason !== 'manual' && <Button variant="ghost" size="sm" onClick={() => askAi(`下载队列暂停了（${copy.title}），帮我看看是怎么回事、该怎么处理`)}>
-      <Sparkles data-icon="inline-start" className="text-seal" />问问 AI
+      <Sparkles data-icon="inline-start" />问问 AI
     </Button>}
   </div>;
 }

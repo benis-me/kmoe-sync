@@ -135,7 +135,7 @@ function AccountCard({ account, reserveMB }: { account: KmoeAccount; reserveMB: 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate font-medium">{account.email}</span>
-          {account.vip && <Badge variant="seal">VIP</Badge>}
+          {account.vip && <Badge variant="secondary">VIP</Badge>}
         </span>
         <span className="truncate text-xs text-muted-foreground tabular-nums">
           {[account.level !== null && `Lv.${account.level}`, account.mirror, account.checkedAt && `${fromNow(account.checkedAt)}更新`].filter(Boolean).join(' · ')}

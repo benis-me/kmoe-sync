@@ -211,7 +211,7 @@ function Panel({ onClose }: { onClose: () => void }) {
   return <aside role="dialog" aria-modal="false" aria-labelledby="assistant-title" onKeyDown={e => { if (e.key === 'Escape') close(); }}
     className="fixed inset-0 z-50 flex animate-rise flex-col bg-background md:inset-auto md:top-4 md:right-4 md:bottom-4 md:w-[440px] md:overflow-hidden md:rounded-2xl md:bg-card md:shadow-panel md:ring-1 md:ring-border">
     <header className="flex items-center gap-2 border-b px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
-      <Sparkles aria-hidden className="size-4 text-seal" />
+      <Sparkles aria-hidden className="size-4 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 flex-col">
         <h2 id="assistant-title" className="text-sm font-semibold">AI 助手</h2>
         {ai?.ready && <span className="truncate font-mono text-[11px] text-muted-foreground">{ai.model}</span>}
@@ -236,7 +236,7 @@ function Panel({ onClose }: { onClose: () => void }) {
         const parts = running ? [...turn.parts, ...live] : turn.parts;
         const tail = parts.at(-1), text = textOf(parts);
         return <section key={index} aria-label={turn.question} className="flex flex-col gap-3">
-          <p className="ml-8 self-end rounded-2xl rounded-br-md bg-seal-soft px-3.5 py-2 text-[13px] leading-relaxed break-words whitespace-pre-wrap">{turn.question}</p>
+          <p className="ml-8 self-end rounded-2xl rounded-br-md bg-muted px-3.5 py-2 text-[13px] leading-relaxed break-words whitespace-pre-wrap">{turn.question}</p>
           <Answer parts={parts} marks={conversation.marks} onNavigate={followLink} />
           {running && !(tail?.kind === 'tool' && conversation.marks[tail.id]?.status === 'running') && <Thinking label={tail?.kind === 'text' ? undefined : '思考中'} />}
           {!running && text && <div className="-mt-1.5 -ml-1.5 flex items-center">
@@ -281,11 +281,13 @@ function Panel({ onClose }: { onClose: () => void }) {
 /** The floating button (bottom right, above the phone tab bar; not on full-screen pages) and the panel it opens. */
 export function Assistant({ hideButton = false }: { hideButton?: boolean }) {
   const { open, show, hide } = useAssistant();
+  const { data: aiReady = false } = useQuery({ ...aiSettingsQuery, select: settings => settings.ready });
   if (open) return <Panel onClose={hide} />;
-  if (hideButton) return null;
-  // Phones: a 48px circle 16px above the tab bar. Wider screens: a pill with its name, less padding on the icon side.
-  return <Button data-assistant-button variant="outline" onClick={() => show()} aria-label="打开 AI 助手"
-    className="fixed right-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 size-12 rounded-full bg-card p-0 shadow-float md:right-6 md:bottom-6 md:h-10 md:w-auto md:pr-3.5 md:pl-3">
-    <Sparkles className="size-5 text-seal md:size-4" /><span className="max-md:sr-only">AI 助手</span>
+  // Without AI set up there is nothing to ask (the other 问 AI buttons check the same); the panel still opens from them.
+  if (hideButton || !aiReady) return null;
+  // A circle: 48px above the phone tab bar, 40px in the corner on wider screens, where it covers as little of the rows as it can.
+  return <Button data-assistant-button variant="outline" onClick={() => show()} aria-label="打开 AI 助手" title="AI 助手"
+    className="fixed right-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 size-12 rounded-full bg-card p-0 shadow-float md:right-6 md:bottom-6 md:size-10">
+    <Sparkles className="size-5 text-muted-foreground md:size-4" /><span className="sr-only">AI 助手</span>
   </Button>;
 }

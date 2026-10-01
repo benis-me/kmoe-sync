@@ -60,7 +60,7 @@ export function ActionBar({ count, sizeMB, remainingMB, reserveMB, reason, busy,
           {/* Phones have no room for the reason beside the button: with chapters picked and no quota line (Kmoe not logged in), it goes here. */}
           {remainingMB !== null ? <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
             <div aria-hidden className="h-1 w-24 shrink-0 overflow-hidden rounded-full bg-foreground/8">
-              <div className={cn('h-full origin-left transition-[transform,background-color] duration-300 ease-out-strong', exceeds ? 'bg-destructive' : belowReserve ? 'bg-warning' : 'bg-seal')}
+              <div className={cn('h-full origin-left transition-[transform,background-color] duration-300 ease-out-strong', exceeds ? 'bg-destructive' : belowReserve ? 'bg-warning' : 'bg-foreground/70')}
                 style={{ transform: `scaleX(${remainingMB > 0 ? Math.min(1, sizeMB / remainingMB) : 1})` }} />
             </div>
             {exceeds
@@ -72,7 +72,8 @@ export function ActionBar({ count, sizeMB, remainingMB, reserveMB, reason, busy,
         {/* Nothing picked is said on the left already. */}
         {count > 0 && reason && !busy && <span id="start-reason" className="max-w-40 text-right text-xs text-muted-foreground max-sm:hidden">{reason}</span>}
         {/* aria-disabled, not disabled: it stays focusable (with its reason) and keeps focus while adding. */}
-        <Button variant="seal" size="lg" className="shrink-0 sm:min-w-34" aria-disabled={!!reason || busy} aria-describedby={count > 0 && reason ? 'start-reason' : undefined}
+        {/* Not startable: a neutral button, not a faded seal (which reads as a mis-coloured live one). */}
+        <Button variant={reason ? 'secondary' : 'seal'} size="lg" className="shrink-0 sm:min-w-34" aria-disabled={!!reason || busy} aria-describedby={count > 0 && reason ? 'start-reason' : undefined}
           onClick={() => { if (!reason && !busy) onStart(); }}>
           {busy ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <Download data-icon="inline-start" />}
           {busy ? '添加中…' : '开始下载'}

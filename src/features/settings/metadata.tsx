@@ -194,7 +194,7 @@ function OptionsCard({ options, bangumi }: { options: MetadataOptions; bangumi: 
   const patch = usePatchMetadata();
   const save = (next: Partial<MetadataOptions>) => patch.mutate({ options: next });
   return <Card className="gap-0 divide-y py-0">
-    <div className="flex items-start justify-between gap-4 px-5 pt-4 pb-3">
+    <div className="flex items-start justify-between gap-4 px-5 pt-4 pb-3 sm:px-6">
       <div className="flex flex-col gap-0.5">
         <h3 className="text-[15px] font-semibold tracking-tight">写入内容</h3>
         <p className="text-xs text-muted-foreground">简介、状态、出版社和标签总会写入。</p>

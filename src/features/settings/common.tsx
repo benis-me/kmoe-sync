@@ -63,7 +63,7 @@ export function SaveHint({ pending, saved }: { pending: boolean; saved: boolean 
 export function SettingRow({ label, description, htmlFor, labelId, children, className }: {
   label: string; description?: ReactNode; htmlFor?: string; labelId?: string; children: ReactNode; className?: string;
 }) {
-  return <div className={cn('flex items-center justify-between gap-x-6 gap-y-3 px-5 py-4 max-sm:flex-col max-sm:items-stretch', className)}>
+  return <div className={cn('flex items-center justify-between gap-x-6 gap-y-3 px-5 py-4 max-sm:flex-col max-sm:items-stretch sm:px-6', className)}>
     <div className="flex min-w-0 flex-col gap-0.5">
       {htmlFor ? <label id={labelId} htmlFor={htmlFor} className="text-sm font-medium">{label}</label> : <span id={labelId} className="text-sm font-medium">{label}</span>}
       {description && <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>}

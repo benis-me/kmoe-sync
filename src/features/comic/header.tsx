@@ -57,7 +57,7 @@ export function ComicHeader({ detail, kmoeUrl, refreshing, onRefresh, titleRef }
         {refreshing ? '正在刷新…' : <>刷新<span className="text-muted-foreground max-sm:hidden"> · {fromNow(comic.fetchedAt)}获取</span></>}
       </Button>
       {/* The floating AI 助手 button is not shown on this full-screen page. */}
-      {aiReady && <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => askAi()}><Sparkles data-icon="inline-start" className="text-seal" />问 AI</Button>}
+      {aiReady && <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => askAi()}><Sparkles data-icon="inline-start" />问 AI</Button>}
     </div>
   </header>;
 }

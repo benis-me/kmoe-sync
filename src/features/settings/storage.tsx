@@ -46,7 +46,7 @@ export function StorageSection() {
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate font-medium">{target.name}</span>
                 <Badge variant="muted" className="shrink-0">{target.kind === 'local' ? '本地' : 'WebDAV'}</Badge>
-                {target.isDefault && <Badge variant="seal" className="shrink-0">默认</Badge>}
+                {target.isDefault && <Badge variant="secondary" className="shrink-0">默认</Badge>}
               </span>
               <Summary target={target} libraryRoot={root} />
             </span>

@@ -64,7 +64,7 @@ export function AboutSection() {
     </Card>
 
     <Card className="gap-0 py-0">
-      <div className="border-b px-5 pt-4 pb-3">
+      <div className="border-b px-5 pt-4 pb-3 sm:px-6">
         <h3 className="text-[15px] font-semibold tracking-tight">设置概况</h3>
         <p className="text-xs text-muted-foreground">点一行可以去修改。</p>
       </div>

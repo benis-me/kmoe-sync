@@ -14,7 +14,7 @@ import { useClosable } from './pickers';
 
 export function PolishBanner({ count, onOpen }: { count: number; onOpen: () => void }) {
   return <div className="flex animate-rise flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-dashed px-4 py-2.5">
-    <WandSparkles aria-hidden className="size-4 shrink-0 text-seal" />
+    <WandSparkles aria-hidden className="size-4 shrink-0 text-muted-foreground" />
     <span className="min-w-0 flex-1 text-sm">AI 整理好了 {count} 部的简介和标签，确认后才会写入 Komga。</span>
     <Button variant="outline" size="sm" onClick={onOpen}>查看并确认</Button>
   </div>;
@@ -22,10 +22,10 @@ export function PolishBanner({ count, onOpen }: { count: number; onOpen: () => v
 
 function Version({ label, text, ai }: { label: string; text: MetadataText; ai?: boolean }) {
   return <section aria-label={label} className="flex min-w-0 flex-col gap-2">
-    <h4 className={cn('text-xs font-medium', ai ? 'text-seal' : 'text-muted-foreground')}>{label}</h4>
+    <h4 className={cn('text-xs font-medium', ai ? 'text-foreground' : 'text-muted-foreground')}>{label}</h4>
     <p className={cn('line-clamp-[8] text-[13px] leading-relaxed whitespace-pre-line', !ai && 'text-muted-foreground')}>{text.summary || '（没有简介）'}</p>
     {text.genres.length + text.tags.length > 0 && <ul aria-label="类型和标签" className="flex flex-wrap gap-1">
-      {text.genres.map(genre => <li key={`g${genre}`} className="rounded-md bg-seal-soft px-1.5 py-0.5 text-[11px] text-seal">{genre}</li>)}
+      {text.genres.map(genre => <li key={`g${genre}`} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{genre}</li>)}
       {text.tags.map(tag => <li key={`t${tag}`} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{tag}</li>)}
     </ul>}
   </section>;
