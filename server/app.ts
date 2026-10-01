@@ -1,7 +1,7 @@
 // Composition root: builds every service, the HTTP routes and the background scheduler.
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { mkdir, rename } from 'node:fs/promises';
-import { join, normalize, resolve } from 'node:path';
+import { join, normalize, resolve, sep } from 'node:path';
 import type { Server } from 'bun';
 import type { About, Status } from '@shared/model';
 import { AiService } from './ai/service';
@@ -242,7 +242,7 @@ export function createApp(config: Config, options: AppOptions = {}) {
     try { pathname = decodeURIComponent(url.pathname); } catch { pathname = '/'; }
     const path = normalize(join(staticRoot, pathname));
     const headers = new Headers(SECURITY_HEADERS);
-    if (path.startsWith(staticRoot) && existsSync(path) && statSync(path).isFile()) {
+    if ((path === staticRoot || path.startsWith(staticRoot + sep)) && existsSync(path) && statSync(path).isFile()) {
       headers.set('Cache-Control', pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
       // The build's Brotli / gzip copies (vite.config.ts), when the browser accepts them: a quarter of the bytes.
       const accepted = req.headers.get('accept-encoding') ?? '';

@@ -63,6 +63,12 @@ export function buildRoutes(handlers: Handlers, auth: AdminAuth, tokenValid: (re
     const [method, path] = key.split(' ') as [string, string];
     add(path, method, async (req, server) => {
       try {
+        // Another web page can post text/plain, form or multipart bodies here without asking first, but not JSON: setup
+        // and login have no CSRF token to check, so this keeps them from being called across sites.
+        const body = Number(req.headers.get('content-length') ?? 0) > 0 || req.headers.has('transfer-encoding');
+        if (method !== 'GET' && body && !/^application\/json\b/i.test(req.headers.get('content-type') ?? '')) {
+          throw new AppError(415, 'unsupported_media_type', '请求内容必须是 JSON');
+        }
         const session = auth.session(req);
         if (!PUBLIC.has(key)) {
           if (!session) throw new AppError(401, 'unauthenticated', '请先登录');

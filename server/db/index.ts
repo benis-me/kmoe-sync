@@ -105,6 +105,10 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE folder_metadata ADD COLUMN komga_written TEXT;
   `,
+  // v6: the latest task per item/target/format (item states, retries) without scanning the whole table.
+  `
+  CREATE INDEX tasks_latest ON tasks (item_id, target_id, format, id);
+  `,
 ];
 
 export type DB = Database;

@@ -71,6 +71,10 @@ describe('admin auth', () => {
     expect((await api('GET', '/api/auth/state')).data).toMatchObject({ setupRequired: true, authenticated: false });
     expect((await api('GET', '/api/status')).status).toBe(401);
     expect((await api('POST', '/api/auth/setup', { password: 'short' })).status).toBe(400);
+    // Another web page can post text/plain here without asking first: setup takes JSON only.
+    const crossSite = await fetch(`${base}/api/auth/setup`, { method: 'POST', body: JSON.stringify({ password: 'someone else' }), headers: { 'Content-Type': 'text/plain' } });
+    expect(crossSite.status).toBe(415);
+    expect((await api('GET', '/api/auth/state')).data.setupRequired).toBe(true);
     const setup = await api('POST', '/api/auth/setup', { password: 'correct horse' });
     expect(setup.data).toMatchObject({ setupRequired: false, authenticated: true });
     csrf = setup.data.csrf;
@@ -416,5 +420,12 @@ describe('web UI', () => {
       expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
       expect(await response.text()).toBe(code);
     }
+  });
+
+  test('a path that climbs out of the web folder is not served, even into a folder whose name starts the same', async () => {
+    mkdirSync(join(root, 'web-private'), { recursive: true });
+    writeFileSync(join(root, 'web-private', 'secret.txt'), 'private notes');
+    const response = await fetch(`${base}/..%2Fweb-private%2Fsecret.txt`);
+    expect(await response.text()).not.toContain('private notes');
   });
 });

@@ -2,7 +2,7 @@
 # Kmoe Sync: one self-contained binary + the built web UI. Multi-arch (linux/amd64, linux/arm64).
 # The amd64 build targets x64-baseline so it also runs on NAS CPUs without AVX2 (Celeron/Atom/older Xeon).
 
-FROM --platform=$BUILDPLATFORM oven/bun:1.3 AS build
+FROM --platform=$BUILDPLATFORM oven/bun:1.3.14 AS build
 WORKDIR /src
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
