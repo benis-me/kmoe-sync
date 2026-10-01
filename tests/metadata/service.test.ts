@@ -136,9 +136,12 @@ describe('settings', () => {
     expect((await metadata.testKomga({ url: komga.url })).message).toContain('API Key');
     metadata.patchSettings({ komga: { url: komga.url, secret: komga.apiKey } });
     expect((await metadata.testKomga({})).ok).toBe(true);
-    expect((await metadata.testKomga({ url: 'http://127.0.0.1:1' })).message).toContain('无法连接');
+    // The saved key only goes to the server it was entered for: another address asks for it, and saving one drops it.
+    expect((await metadata.testKomga({ url: 'http://127.0.0.1:1' })).message).toContain('API Key');
+    expect((await metadata.testKomga({ url: 'http://127.0.0.1:1', secret: 'typed again' })).message).toContain('无法连接');
     komga.state.roles = ['USER'];
     expect(await metadata.testKomga({})).toMatchObject({ ok: false, message: expect.stringContaining('ADMIN') });
+    expect(metadata.patchSettings({ komga: { url: 'http://127.0.0.1:1' } }).komga.hasSecret).toBe(false);
   });
 
   test('forFolders: Komga state is disabled until enabled, configured and mapped', () => {

@@ -38,3 +38,8 @@ export function safeEqual(a: string, b: string): boolean {
   const left = Buffer.from(a), right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
 }
+
+/** Same server (scheme, host and port): a saved secret is only ever sent back to the server it was entered for. */
+export function sameOrigin(a: string, b: string): boolean {
+  try { return new URL(a).origin === new URL(b).origin; } catch { return false; }
+}

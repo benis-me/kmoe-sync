@@ -109,6 +109,13 @@ describe('settings', () => {
     ai.state.noJsonMode = false;
   });
 
+  test('the saved key only goes to the address it was entered for', async () => {
+    const elsewhere = 'http://127.0.0.1:1/v1';
+    expect((await api('POST', '/api/ai/test', { baseUrl: elsewhere })).data).toMatchObject({ ok: false, message: '请填写 API Key' });
+    expect((await api('PATCH', '/api/ai/settings', { baseUrl: elsewhere })).data).toMatchObject({ hasKey: false, ready: false });
+    expect((await api('PATCH', '/api/ai/settings', { baseUrl: `${ai.origin}/v1`, apiKey: 'sk-test' })).data).toMatchObject({ hasKey: true, ready: true });
+  });
+
   test('usage is counted per month and the budget stops further calls', async () => {
     const used = (await api('GET', '/api/ai/settings')).data.usage.tokens as number;
     expect(used).toBeGreaterThan(0);
@@ -180,6 +187,20 @@ describe('assistant', () => {
     expect(textOf(approved)).toBe('下载队列已暂停。');
     expect((await api('GET', '/api/status')).data.queue.paused).toBe(true);
     await api('POST', '/api/queue/resume');
+  });
+
+  test('a change is put to the user with what it would do now: how many items and how much, or that every series is rewritten', async () => {
+    ai.state.reply = request => {
+      if (promptOf(request).last.role !== 'user') return { text: '好了。' };
+      return { text: '好的，', tools: [{ name: 'subscribe', args: { key: 'b1c4a0' } }, { name: 'download', args: { key: 'f7e2c9' } }, { name: 'sync_metadata', args: { all: true } }] };
+    };
+    const events = await chat([{ role: 'user', content: '订阅迷宮飯，下载芙莉蓮缺的卷，再把元数据全部重写一遍' }]);
+    const confirm = events.find(event => event.type === 'confirm') as Extract<ChatEvent, { type: 'confirm' }>;
+    expect(confirm.calls.map(call => call.label)).toEqual([
+      expect.stringMatching(/^订阅 《迷宮飯》 · 补齐缺失 · 将新增 14 项 · 约 [\d.]+ MB$/),
+      expect.stringMatching(/^加入下载队列 《葬送的芙莉蓮》 · 全部缺失的单行本 13 项 · 约 [\d.]+ MB$/),
+      '处理元数据 · 重写全部系列',
+    ]);
   });
 
   test('without AI set up the chat answers with a plain JSON error', async () => {

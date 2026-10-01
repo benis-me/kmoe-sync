@@ -2,11 +2,13 @@
 // Read-only tools run at once; tools that change something wait for the user's OK (the page asks, then sends the answer
 // back together with the conversation, which the browser keeps).
 import { z } from 'zod';
-import { ChatRequest, type ChatEvent, type ChatMessage, type ChatToolCall } from '@shared/model';
+import { CONTENT_LABELS, ChatRequest, type ChatEvent, type ChatMessage, type ChatToolCall, type ContentType } from '@shared/model';
+import { formatBytes } from '@shared/naming';
 import type { App } from '../app';
-import { TOOLS, type Call } from '../api/mcp';
+import { downloadPlan, subscriptionInput, TOOLS, type Call } from '../api/mcp';
 import { AppError, errorResponse } from '../http/errors';
 import { errorMessage } from '../lib/retry';
+import { itemSize } from '../services/comics';
 import type { ToolSpec } from './client';
 
 /** Tools that only read: they run without asking. */
@@ -51,18 +53,53 @@ function argsOf(call: ChatToolCall): Record<string, unknown> {
   } catch { return {}; }
 }
 
-/** What a tool call does, for the page: "加入下载队列 《葬送的芙莉蓮》 3 项". */
-function labelOf(app: App, call: ChatToolCall): string {
+/** The tool and the comic it is about: "加入下载队列 《葬送的芙莉蓮》". */
+function named(app: App, call: ChatToolCall): string {
   const args = argsOf(call), name = call.function.name;
   let title: string | null = null;
   if (typeof args.key === 'string') {
     try { title = app.comics.find(app.comics.resolve(args.key))?.title ?? args.key; } catch { title = args.key; }
   }
+  return [LABELS[name] ?? name, title && `《${title}》`].filter(Boolean).join(' ');
+}
+
+/** What a tool call does, for the page: "加入下载队列 《葬送的芙莉蓮》 3 项". */
+function labelOf(app: App, call: ChatToolCall): string {
+  const args = argsOf(call), name = call.function.name;
   const extra = name === 'download' && Array.isArray(args.itemIds) ? `${args.itemIds.length} 项`
     : name === 'subscribe' ? (args.strategy === 'future' ? '（仅追新）' : args.strategy === 'backfill' ? '（补齐缺失）' : '')
     : name === 'set_queue' ? (args.paused ? '暂停' : '继续')
     : name === 'search_comics' && typeof args.query === 'string' ? `「${args.query}」` : '';
-  return [LABELS[name] ?? name, title && `《${title}》`, extra].filter(Boolean).join(' ');
+  return [named(app, call), extra].filter(Boolean).join(' ');
+}
+
+const mb = (value: number) => formatBytes(value * 1024 * 1024);
+
+/**
+ * A change waiting for the user's OK, with what it would do now, as the comic page shows it before a manual subscription
+ * or download: "订阅 《X》 · 补齐缺失 · 将新增 34 项 · 约 5.2 GB", and a warning when that is more than the quota left.
+ */
+async function confirmLabel(app: App, call: ChatToolCall): Promise<string> {
+  const args = argsOf(call), name = call.function.name, impact: string[] = [];
+  let sizeMB = 0;
+  try {
+    const key = typeof args.key === 'string' ? app.comics.resolve(args.key) : null;
+    if (name === 'subscribe' && key) {
+      const input = subscriptionInput(app, key, args), plan = await app.subscriptions.preview(key, input);
+      sizeMB = plan.sizeMB;
+      impact.push(input.strategy === 'future' ? '仅追新' : '补齐缺失', plan.queue ? `将新增 ${plan.queue} 项 · 约 ${mb(plan.sizeMB)}` : '现在不会新增下载');
+      if (plan.cancel) impact.push(`取消 ${plan.cancel} 个等待中的任务`);
+    } else if (name === 'download' && key) {
+      const plan = await downloadPlan(app, key, args), wanted = new Set(plan.itemIds);
+      const items = app.comics.items(app.comics.row(key).id).filter(item => wanted.has(item.remote_id));
+      sizeMB = items.reduce((sum, item) => sum + itemSize(item, plan.format), 0);
+      const types = ((args.types as ContentType[] | undefined) ?? ['volume']).map(type => CONTENT_LABELS[type]).join('、');
+      impact.push(!items.length ? '没有缺失的项' : `${Array.isArray(args.itemIds) && args.itemIds.length ? '' : `全部缺失的${types} `}${items.length} 项 · 约 ${mb(sizeMB)}`);
+    } else if (name === 'sync_metadata' && args.all === true) impact.push('重写全部系列');
+    const remaining = app.kmoe.account().remainingMB;
+    if (remaining !== null && sizeMB > remaining) impact.push(`超出剩余额度 ${mb(remaining)}`);
+  } catch { /* Shown without it: running the call reports what is wrong. */ }
+  return impact.length ? [named(app, call), ...impact].join(' · ') : labelOf(app, call);
 }
 
 async function runTool(app: App, call: Call, tool: ChatToolCall): Promise<{ ok: boolean; content: string }> {
@@ -163,7 +200,7 @@ export async function chatResponse(req: Request, app: App, call: Call): Promise<
           for (const tool of calls) if (READ_ONLY.has(tool.function.name)) await execute(tool);
           const writes = calls.filter(tool => !READ_ONLY.has(tool.function.name));
           if (writes.length) {
-            send({ type: 'confirm', calls: writes.map(tool => ({ id: tool.id, name: tool.function.name, label: labelOf(app, tool) })) });
+            send({ type: 'confirm', calls: await Promise.all(writes.map(async tool => ({ id: tool.id, name: tool.function.name, label: await confirmLabel(app, tool) }))) });
             break;
           }
         }

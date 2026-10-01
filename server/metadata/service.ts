@@ -10,7 +10,7 @@ import { AI_CONFIDENT, type AiService, type FolderFacts } from '../ai/service';
 import { json, now, type DB } from '../db';
 import type { EventHub } from '../events';
 import { AppError } from '../http/errors';
-import type { Sealer } from '../lib/crypto';
+import { sameOrigin, type Sealer } from '../lib/crypto';
 import { errorMessage, isRetryable, transient } from '../lib/retry';
 import type { ActivityLog } from '../services/activity';
 import type { ComicService, ItemRow } from '../services/comics';
@@ -198,7 +198,9 @@ export class MetadataService {
     for (const [key, value] of Object.entries(patch.options ?? {})) if (value !== undefined) Object.assign(next.options, { [key]: value });
     this.write(KEY, next);
     if (next.bangumi.source === 'archive' && current.bangumi.source !== 'archive' && !this.offline.reader.ready) this.offline.autoStart();
+    // The saved key or password only ever goes to the server it was entered for: a new address needs it typed again.
     if (komga?.secret !== undefined) this.setSecret(SECRET, komga.secret);
+    else if (current.komga.url && !sameOrigin(current.komga.url, next.komga.url)) this.setSecret(SECRET, '');
     if (patch.bangumi?.token !== undefined) {
       this.setSecret(TOKEN, patch.bangumi.token.trim());
       // Searches differ with a token (R18 entries): forget the cached ones.
@@ -219,7 +221,7 @@ export class MetadataService {
     let url: string;
     try { url = draft.url !== undefined ? komgaUrl(draft.url) : saved.url; } catch (error) { return fail(errorMessage(error)); }
     const auth = draft.auth ?? saved.auth, username = draft.username?.trim() ?? saved.username;
-    const secret = draft.secret !== undefined ? draft.secret : this.secret(SECRET) ?? '';
+    const secret = draft.secret !== undefined ? draft.secret : sameOrigin(saved.url, url) ? this.secret(SECRET) ?? '' : '';
     if (!url) return fail('请填写 Komga 地址');
     if (auth === 'basic' && !username) return fail('请填写 Komga 用户名（邮箱）');
     if (!secret) return fail(auth === 'apiKey' ? '请填写 Komga API Key' : '请填写 Komga 密码');

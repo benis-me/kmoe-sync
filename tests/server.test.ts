@@ -365,6 +365,21 @@ describe('WebDAV target', () => {
     expect((await api('DELETE', `/api/targets/${targetId}`)).status).toBe(200);
   });
 
+  test('a saved password only goes to the server it was entered for', async () => {
+    const seen: (string | null)[] = [];
+    const other = Bun.serve({ port: 0, fetch(req) { seen.push(req.headers.get('authorization')); return new Response('', { status: 401 }); } });
+    try {
+      const base = { kind: 'webdav', name: 'Moving', username: 'nas', path: '/Comics', rule: '{title}/{filename}' };
+      const targetId = (await api('POST', '/api/targets', { ...base, url: dav.url, password: 'dav-secret' })).data.id;
+      const elsewhere = `http://127.0.0.1:${other.port}/dav`;
+      await api('POST', '/api/targets/test', { targetId, draft: { ...base, url: elsewhere } });
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.some(header => header?.includes(btoa('nas:dav-secret')))).toBe(false);
+      expect((await api('PATCH', `/api/targets/${targetId}`, { url: elsewhere })).data.hasPassword).toBe(false);
+      expect((await api('DELETE', `/api/targets/${targetId}`)).status).toBe(200);
+    } finally { other.stop(true); }
+  });
+
   test('an upload that fails is sent again from the staged file, not downloaded again', async () => {
     const targetId = (await api('POST', '/api/targets', { kind: 'webdav', name: 'Flaky WebDAV', url: dav.url, username: 'nas', password: 'dav-secret', path: '/Comics', rule: '{title}/{filename}' })).data.id;
     const files = async () => (await (await fetch(`${fake.origin}/__fake/state`)).json() as { fileRequests: number }).fileRequests;

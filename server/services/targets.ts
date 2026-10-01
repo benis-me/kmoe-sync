@@ -3,7 +3,7 @@ import type { Target, TargetInput } from '@shared/model';
 import { DEFAULT_RULE, NamingError, normalizePath, validateRule } from '@shared/naming';
 import { now, type DB } from '../db';
 import { AppError } from '../http/errors';
-import type { Sealer } from '../lib/crypto';
+import { sameOrigin, type Sealer } from '../lib/crypto';
 import { createStorage } from '../storage';
 import type { StorageTarget } from '../storage/types';
 import type { SettingsStore } from './settings';
@@ -56,8 +56,11 @@ export class TargetService {
       const rule = validateRule(input.rule || DEFAULT_RULE);
       const path = normalizePath(input.path || '/');
       if (input.kind === 'local') return { kind: 'local', name: input.name, path, url: null, username: null, password: null, rule };
-      const password = input.password === undefined ? previous?.password ?? null : input.password || null;
-      return { kind: 'webdav', name: input.name, path, url: webdavUrl(input.url), username: input.username?.trim() || null, password, rule };
+      const url = webdavUrl(input.url);
+      // A saved password only ever goes to the server it was entered for: another address needs it typed again.
+      const kept = previous?.url && sameOrigin(previous.url, url) ? previous.password : null;
+      const password = input.password === undefined ? kept : input.password || null;
+      return { kind: 'webdav', name: input.name, path, url, username: input.username?.trim() || null, password, rule };
     } catch (error) {
       if (error instanceof NamingError) throw new AppError(400, 'invalid_target', error.message);
       throw error;

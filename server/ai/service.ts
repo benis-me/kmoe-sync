@@ -3,7 +3,7 @@
 import type { AiSettings, AiSettingsPatch, AiTestResult, AiVerdict, MetadataText } from '@shared/model';
 import { now, json, type DB } from '../db';
 import { AppError } from '../http/errors';
-import type { Sealer } from '../lib/crypto';
+import { sameOrigin, type Sealer } from '../lib/crypto';
 import { proxied } from '../lib/proxy';
 import { errorMessage } from '../lib/retry';
 import type { SettingsStore } from '../services/settings';
@@ -91,7 +91,10 @@ export class AiService {
   }
 
   patch(patch: AiSettingsPatch): AiSettings {
-    this.write(KEY, this.merged(patch));
+    const before = this.stored().baseUrl, next = this.merged(patch);
+    this.write(KEY, next);
+    // The saved key only ever goes to the service it was entered for: a new address needs it typed again.
+    if (patch.apiKey === undefined && before && !sameOrigin(before, next.baseUrl)) this.deps.db.run('DELETE FROM settings WHERE key = ?', [SECRET]);
     if (patch.apiKey !== undefined) {
       const key = patch.apiKey.trim();
       if (key) this.write(SECRET, Buffer.from(this.deps.sealer.seal(key)).toString('base64'));
@@ -120,7 +123,7 @@ export class AiService {
   async test(draft: AiSettingsPatch): Promise<AiTestResult> {
     let stored: Stored;
     try { stored = this.merged(draft); } catch (error) { return { ok: false, message: errorMessage(error), models: [], json: null }; }
-    const apiKey = draft.apiKey?.trim() || this.key();
+    const apiKey = draft.apiKey?.trim() || (sameOrigin(this.stored().baseUrl, stored.baseUrl) ? this.key() : '');
     if (!stored.baseUrl) return { ok: false, message: '请填写接口地址', models: [], json: null };
     if (!apiKey) return { ok: false, message: '请填写 API Key', models: [], json: null };
     const client = this.clientFor(stored, apiKey);

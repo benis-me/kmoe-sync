@@ -2,7 +2,7 @@
 // Each tool is a thin wrapper over an admin API endpoint, so validation and behaviour are identical.
 import { z } from 'zod';
 import type { EndpointKey, ResponseOf } from '@shared/api';
-import { ContentType, Format, Strategy, TaskStatus } from '@shared/model';
+import { ContentType, Format, Strategy, TaskStatus, type SubscriptionInput } from '@shared/model';
 import { VERSION } from '../config';
 import { AppError, errorResponse } from '../http/errors';
 import { invoke, type Handlers } from '../http/router';
@@ -24,6 +24,28 @@ function viewOf(app: App, comicKey: string, args: Record<string, unknown>): { ta
     : { targetId: query.targetId ?? app.targets.defaultId(), format: query.format ?? app.settings.get().defaultFormat };
   if (view.targetId === null) throw new AppError(409, 'no_target', '还没有存储位置，请先在设置中添加');
   return { targetId: view.targetId, format: view.format };
+}
+
+/** What `subscribe` saves: what was given, else the existing subscription's, else the comic page's target and format. */
+export function subscriptionInput(app: App, comicKey: string, args: Record<string, unknown>): SubscriptionInput {
+  const comic = app.comics.find(comicKey), existing = comic ? app.subscriptions.get(comic.id) : null;
+  const { targetId, format } = viewOf(app, comicKey, args);
+  return {
+    enabled: true, types: (args.types as z.infer<typeof ContentType>[] | undefined) ?? existing?.types ?? ['volume'], format, targetId,
+    strategy: (args.strategy as z.infer<typeof Strategy> | undefined) ?? existing?.strategy ?? 'backfill', line: existing?.line ?? app.settings.get().defaultLine,
+  };
+}
+
+/** What `download` queues: the given items, else every missing or failed one of the given types (volumes by default). */
+export async function downloadPlan(app: App, comicKey: string, args: Record<string, unknown>) {
+  const { targetId, format } = viewOf(app, comicKey, args);
+  let itemIds = args.itemIds as string[] | undefined;
+  if (!itemIds?.length) {
+    const detail = await app.comics.detail(comicKey, { targetId, format }, app.targets.defaultId());
+    const types = (args.types as string[] | undefined) ?? ['volume'];
+    itemIds = detail.items.filter(item => types.includes(item.type) && ['missing', 'failed'].includes(detail.states[item.id]?.state ?? 'missing')).map(item => item.id);
+  }
+  return { itemIds, targetId, format };
 }
 
 /** Also the in-app assistant's tools (server/ai/assistant.ts). */
@@ -52,12 +74,7 @@ export const TOOLS: Record<string, Tool> = {
     input: z.object({ key, types: z.array(ContentType).min(1).optional(), format: Format.optional(), targetId: z.number().int().optional(), strategy: Strategy.optional() }),
     run: async (args, call, app) => {
       const { key: comicKey } = await call('POST /api/resolve', { body: { input: args.key } });
-      const comic = app.comics.find(comicKey), existing = comic ? app.subscriptions.get(comic.id) : null;
-      const { targetId, format } = viewOf(app, comicKey, args);
-      return call('PUT /api/comics/:key/subscription', { params: { key: comicKey }, body: {
-        enabled: true, types: args.types ?? existing?.types ?? ['volume'], format, targetId,
-        strategy: args.strategy ?? existing?.strategy ?? 'backfill', line: existing?.line ?? app.settings.get().defaultLine,
-      } });
+      return call('PUT /api/comics/:key/subscription', { params: { key: comicKey }, body: subscriptionInput(app, comicKey, args) });
     },
   },
   unsubscribe: {
@@ -83,14 +100,8 @@ export const TOOLS: Record<string, Tool> = {
     input: z.object({ key, itemIds: z.array(z.string()).optional(), types: z.array(ContentType).optional(), format: Format.optional(), targetId: z.number().int().optional() }),
     run: async (args, call, app) => {
       const { key: comicKey } = await call('POST /api/resolve', { body: { input: args.key } });
-      const { targetId, format } = viewOf(app, comicKey, args);
-      let itemIds = args.itemIds as string[] | undefined;
-      if (!itemIds?.length) {
-        const detail = await call('GET /api/comics/:key', { params: { key: comicKey }, query: { targetId, format } });
-        const types = (args.types as string[] | undefined) ?? ['volume'];
-        itemIds = detail.items.filter(item => types.includes(item.type) && ['missing', 'failed'].includes(detail.states[item.id]?.state ?? 'missing')).map(item => item.id);
-        if (!itemIds.length) return { created: 0, skipped: 0, sizeMB: 0, note: '没有需要下载的项' };
-      }
+      const { itemIds, format, targetId } = await downloadPlan(app, comicKey, args);
+      if (!itemIds.length) return { created: 0, skipped: 0, sizeMB: 0, note: '没有需要下载的项' };
       return call('POST /api/tasks', { body: { comicKey, itemIds, format, targetId, line: app.settings.get().defaultLine } });
     },
   },

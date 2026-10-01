@@ -12,6 +12,7 @@ import { errorMessage, postStream } from '@/lib/api';
 import { aiSettingsQuery } from '@/lib/queries';
 import { useAssistant } from '@/stores/assistant';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { CopyButton } from '@/components/app/fields';
 
@@ -96,6 +97,8 @@ function Panel({ onClose }: { onClose: () => void }) {
   const [conversation, setConversation] = useState<Conversation>(load);
   const [live, setLive] = useState<Part[] | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  // Of several changes, the ones the user unticked (approving runs the rest).
+  const [declined, setDeclined] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   // What opened the panel (a 「问 AI」 button, or the floating button), to put focus back on when it closes.
@@ -143,7 +146,7 @@ function Panel({ onClose }: { onClose: () => void }) {
               parts.push({ kind: 'tool', id: event.id });
               setLive([...parts]);
             }
-          } else if (event.type === 'confirm') setPending(event.calls);
+          } else if (event.type === 'confirm') { setPending(event.calls); setDeclined(new Set()); }
           else if (event.type === 'messages') final = event.messages;
           else if (event.type === 'error') setError(event.message);
         }
@@ -196,7 +199,7 @@ function Panel({ onClose }: { onClose: () => void }) {
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
   };
-  const decide = (approve: boolean) => { if (pending) void send(conversation.messages, Object.fromEntries(pending.map(call => [call.id, approve]))); };
+  const decide = (approve: boolean) => { if (pending) void send(conversation.messages, Object.fromEntries(pending.map(call => [call.id, approve && !declined.has(call.id)]))); };
   // Ask the last question again (a failed or unhelpful answer).
   const retry = () => {
     const at = conversation.messages.findLastIndex(message => message.role === 'user');
@@ -244,7 +247,15 @@ function Panel({ onClose }: { onClose: () => void }) {
       })}
       {pending && !busy && <div role="group" aria-label="需要确认的操作" className="-mt-3 flex flex-col gap-3 rounded-xl border border-seal/30 bg-seal-soft/60 p-3">
         <span className="text-xs font-medium">要执行这些操作吗？</span>
-        <ul className="flex flex-col gap-1 text-[13px]">{pending.map(call => <li key={call.id} className="flex items-center gap-2"><span aria-hidden className="size-1.5 shrink-0 rounded-full bg-seal" />{call.label}</li>)}</ul>
+        <ul className="flex flex-col gap-1 text-[13px]">{pending.map(call => <li key={call.id} className="flex items-start gap-2">
+          {pending.length > 1
+            ? <label className="flex items-start gap-2"><Checkbox className="mt-0.5" checked={!declined.has(call.id)} onCheckedChange={on => setDeclined(old => {
+              const next = new Set(old);
+              if (on === true) next.delete(call.id); else next.add(call.id);
+              return next;
+            })} />{call.label}</label>
+            : <><span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-seal" />{call.label}</>}
+        </li>)}</ul>
         <div className="flex gap-2">
           <Button size="sm" onClick={() => decide(true)}>确认执行</Button>
           <Button size="sm" variant="ghost" onClick={() => decide(false)}>取消</Button>
