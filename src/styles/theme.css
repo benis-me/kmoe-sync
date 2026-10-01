@@ -3,7 +3,7 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 /* 墨与纸 · Ink & Paper — warm paper, ink type, one vermilion seal accent. */
-:root, :host {
+:root {
   color-scheme: light;
   --app-font: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   --mono-font: "Geist Mono Variable", ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
@@ -192,8 +192,6 @@
   button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
   [hidden] { display: none !important; }
 }
-
-.kmoe-ui { font: 400 14px/1.5 var(--app-font); color: var(--foreground); pointer-events: auto; -webkit-font-smoothing: antialiased; }
 
 /* Reduced motion: drop movement and loops, keep short opacity fades as feedback. */
 @media (prefers-reduced-motion: reduce) {

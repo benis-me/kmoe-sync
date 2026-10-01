@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useOverlayContainer } from "@/components/overlay-container"
 import { cn } from "cn"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
 
@@ -37,7 +36,7 @@ function TooltipContent({
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
   return (
-    <TooltipPrimitive.Portal container={useOverlayContainer()}>
+    <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}

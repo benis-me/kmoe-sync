@@ -1,5 +1,5 @@
-// Naming rules and path helpers, identical in behaviour to the Kmoe Sync browser extension (lib/paths.ts),
-// so a library written by either can be recognised by the other. Pure functions: used by server and web app.
+// Naming rules and path helpers. The rule syntax is the solywsh/kmoe-sync browser extension's, so its exported rule imports
+// as is; unlike the extension, every name is cut to 200 UTF-8 bytes. Pure functions: used by server and web app.
 import type { Format } from './model';
 
 export const DEFAULT_RULE = '{title}/{filename}';

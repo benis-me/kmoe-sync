@@ -101,7 +101,7 @@ Kmoe Sync 在 NAS 上 7×24 小时运行：定时检查更新、排队下载、�
 
 - **通知**：Webhook、Bark、Telegram，按事件订阅（新章节、下载完成 / 失败、登录失效、额度不足）。
 - **REST API 与 MCP**：可以让 Claude Code、Cursor 等 AI 客户端直接搜索、订阅和下载，见 [docs/api.md](docs/api.md)。
-- **从扩展迁移**：导入浏览器扩展导出的配置（WebDAV 服务器与命名规则）。
+- **从扩展迁移**：导入 [solywsh/kmoe-sync](https://github.com/solywsh/kmoe-sync) 浏览器扩展导出的配置（WebDAV 服务器与命名规则）。
 
 ## 快速开始
 
@@ -247,9 +247,9 @@ docker exec kmoesync /app/kmoesync --reset-admin
 </details>
 
 <details>
-<summary><b>能和浏览器扩展 Kmoe Sync 一起用吗？</b></summary>
+<summary><b>能和 solywsh/kmoe-sync 浏览器扩展一起用吗？</b></summary>
 
-可以。两者的命名规则相同，写进同一个书库时能互相识别已下载的章节。扩展里导出的配置（WebDAV 服务器与命名规则）可以在
+可以。[solywsh/kmoe-sync](https://github.com/solywsh/kmoe-sync) 是另一个项目，命名规则的写法和这里相同，写进同一个书库时能互相识别已下载的章节。扩展里导出的配置（WebDAV 服务器与命名规则）可以在
 **设置 → 存储位置** 底部导入。
 </details>
 

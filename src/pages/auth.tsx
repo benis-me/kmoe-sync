@@ -79,7 +79,7 @@ export function SetupPage() {
     <Button type="submit" variant="seal" size="lg" className="w-full" aria-disabled={setup.isPending}>
       {setup.isPending && <LoaderCircle data-icon="inline-start" className="animate-spin" />}创建并进入
     </Button>
-    <p className="text-xs leading-relaxed text-pretty text-muted-foreground">用过浏览器扩展 Kmoe Sync？进入后可以在「设置 › 存储位置」导入扩展配置，WebDAV 书库和命名规则一次迁移。</p>
+    <p className="text-xs leading-relaxed text-pretty text-muted-foreground">用过 <a href="https://github.com/solywsh/kmoe-sync" target="_blank" rel="noreferrer" className="underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground">solywsh/kmoe-sync</a> 浏览器扩展？进入后可以在「设置 › 存储位置」导入它的配置，WebDAV 书库和命名规则一次迁移。</p>
   </AuthCard>;
 }
 

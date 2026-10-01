@@ -296,7 +296,7 @@ export function createApp(config: Config, options: AppOptions = {}) {
       // A first metadata sync can take minutes at Bangumi's rate limit: never hold up subscription checks for it
       // (the metadata tick prevents its own overlap).
       void metadata.tick().catch(error => console.error('[metadata]', error));
-      await sources.syncDue();
+      void sources.syncDue().catch(error => console.error('[sources]', error));
     } catch (error) { console.error('[scheduler]', error); } finally { ticking = false; }
   }
 

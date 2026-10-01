@@ -1,6 +1,5 @@
 import * as React from "react"
 import { Check } from "lucide-react"
-import { useOverlayContainer } from "@/components/overlay-container"
 import { cn } from "cn"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 
@@ -14,7 +13,7 @@ function DropdownMenuTrigger({ ...props }: React.ComponentProps<typeof DropdownM
 
 function DropdownMenuContent({ className, sideOffset = 4, align = "end", ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
-    <DropdownMenuPrimitive.Portal container={useOverlayContainer()}>
+    <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}

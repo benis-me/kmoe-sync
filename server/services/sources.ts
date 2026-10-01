@@ -95,7 +95,8 @@ export class SourceService {
               cover = excluded.cover, url = excluded.url, last_seen_at = excluded.last_seen_at`).run({ source: id, id: entry.externalId, title: entry.title, original: entry.originalTitle, status: entry.status, cover: entry.cover, url: entry.url, now: time });
         }
         // Left the list (or its type is no longer followed): forget it unless it was matched to a comic.
-        this.db.run("DELETE FROM source_items WHERE source_id = ? AND last_seen_at < ? AND match_state != 'matched'", [id, time]);
+        this.db.run("DELETE FROM source_items WHERE source_id = ? AND match_state != 'matched' AND external_id NOT IN (SELECT value FROM json_each(?))",
+          [id, JSON.stringify(entries.map(entry => entry.externalId))]);
         this.db.run('UPDATE sources SET last_sync_at = ?, error = NULL WHERE id = ?', [time, id]);
       })();
       if (added && row.last_sync_at) this.activity.add({ kind: 'source_synced', level: 'info', title: `书单「${row.name}」新增 ${added} 部`, detail: '在「发现 → 书单」中匹配 Kmoe 漫画后即可订阅' });
@@ -109,11 +110,15 @@ export class SourceService {
     return this.get(id);
   }
 
-  async syncDue() {
-    for (const row of this.db.query<Row, []>('SELECT * FROM sources WHERE enabled = 1').all()) {
-      if (row.last_sync_at && Date.parse(row.last_sync_at) + row.interval_hours * 3_600_000 > Date.now()) continue;
-      await this.sync(row.id).catch(() => {});
-    }
+  private running: Promise<void> | null = null;
+  /** Syncs the due lists one after another; the scheduler does not wait for it, so a call while one runs joins that run. */
+  syncDue(): Promise<void> {
+    return this.running ??= (async () => {
+      for (const row of this.db.query<Row, []>('SELECT * FROM sources WHERE enabled = 1').all()) {
+        if (row.last_sync_at && Date.parse(row.last_sync_at) + row.interval_hours * 3_600_000 > Date.now()) continue;
+        await this.sync(row.id).catch(() => {});
+      }
+    })().finally(() => { this.running = null; });
   }
 
   private itemRow(id: number): ItemRow {

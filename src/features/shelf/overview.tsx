@@ -113,7 +113,7 @@ export function Onboarding({ status }: { status: Status }) {
         action={<Button size="xs" variant="outline" asChild><Link to="/discover">去发现<ChevronRight data-icon="inline-end" /></Link></Button>} />
     </ol>
     <p className="relative border-t bg-muted/35 px-5 py-3 text-xs text-muted-foreground">
-      用过浏览器扩展？<Link to="/settings/$section" params={{ section: 'storage' }} hash="import" className="font-medium text-foreground underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground">导入扩展配置</Link>，WebDAV 书库和命名规则一次迁移。
+      用过 <a href="https://github.com/solywsh/kmoe-sync" target="_blank" rel="noreferrer" className="underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground">solywsh/kmoe-sync</a> 浏览器扩展？<Link to="/settings/$section" params={{ section: 'storage' }} hash="import" className="font-medium text-foreground underline decoration-foreground/30 underline-offset-4 hover:decoration-foreground">导入扩展配置</Link>，WebDAV 书库和命名规则一次迁移。
     </p>
   </section>;
 }
