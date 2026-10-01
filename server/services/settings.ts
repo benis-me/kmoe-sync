@@ -1,7 +1,9 @@
-// App settings: one JSON value per key, with defaults. Also holds queue pause state and the API token hash.
+// App settings: one JSON value per key, with defaults. Also holds queue pause state, the API token hash, and the values
+// and sealed secrets other services keep in the settings table.
 import { Settings, type Channel, type PauseReason, type SettingsPatch } from '@shared/model';
 import { json, type DB } from '../db';
 import type { ThrottleState } from '../kmoe/client';
+import type { Sealer } from '../lib/crypto';
 
 export type SettingsValue = Omit<Settings, 'apiToken'>;
 export const DEFAULTS: SettingsValue = {
@@ -24,18 +26,28 @@ export const SECRET_MASK = '••••••••';
 const masked = (channel: Channel): Channel => channel.kind === 'telegram' ? { ...channel, token: SECRET_MASK } : channel.kind === 'bark' ? { ...channel, key: SECRET_MASK } : channel;
 
 export class SettingsStore {
-  constructor(private readonly db: DB) {}
+  constructor(private readonly db: DB, private readonly sealer: Sealer) {}
 
-  private read<T>(key: string, fallback: T): T {
+  value<T>(key: string, fallback: T): T {
     const row = this.db.query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?').get(key);
     return row ? json<T>(row.value, fallback) : fallback;
   }
-  private write(key: string, value: unknown) {
+  setValue(key: string, value: unknown) {
     this.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', [key, JSON.stringify(value)]);
+  }
+  /** A password or key, sealed with the data directory's secret like the others. */
+  secret(key: string): string | null {
+    const sealed = this.value<string | null>(key, null);
+    return sealed ? this.sealer.open(Buffer.from(sealed, 'base64')) : null;
+  }
+  /** '' forgets it. */
+  setSecret(key: string, value: string) {
+    if (value) this.setValue(key, Buffer.from(this.sealer.seal(value)).toString('base64'));
+    else this.db.run('DELETE FROM settings WHERE key = ?', [key]);
   }
 
   get(): SettingsValue {
-    const stored = this.read<Partial<SettingsValue>>('app', {});
+    const stored = this.value<Partial<SettingsValue>>('app', {});
     return { ...DEFAULTS, ...stored };
   }
   /** What the page gets: notification secrets (bot tokens, Bark keys) never leave the server, like other passwords. */
@@ -53,17 +65,17 @@ export class SettingsStore {
   patch(input: SettingsPatch): SettingsValue {
     const patch = input.notifications ? { ...input, notifications: input.notifications.map(channel => this.unmask(channel)) } : input;
     const next = { ...this.get(), ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) } as SettingsValue;
-    this.write('app', next);
+    this.setValue('app', next);
     return next;
   }
 
-  apiTokenHash(): string | null { return this.read<string | null>('apiTokenHash', null); }
-  setApiTokenHash(hash: string | null) { this.write('apiTokenHash', hash); }
+  apiTokenHash(): string | null { return this.value<string | null>('apiTokenHash', null); }
+  setApiTokenHash(hash: string | null) { this.setValue('apiTokenHash', hash); }
 
-  pause(): { reason: PauseReason | null; since: string | null } { return this.read('queuePause', { reason: null, since: null }); }
-  setPause(reason: PauseReason | null) { this.write('queuePause', { reason, since: reason ? new Date().toISOString() : null }); }
+  pause(): { reason: PauseReason | null; since: string | null } { return this.value('queuePause', { reason: null, since: null }); }
+  setPause(reason: PauseReason | null) { this.setValue('queuePause', { reason, since: reason ? new Date().toISOString() : null }); }
 
   /** Kmoe's last block (see kmoe/client.ts), kept across restarts. */
-  kmoeThrottle(): ThrottleState | null { return this.read<ThrottleState | null>('kmoeThrottle', null); }
-  setKmoeThrottle(state: ThrottleState) { this.write('kmoeThrottle', state); }
+  kmoeThrottle(): ThrottleState | null { return this.value<ThrottleState | null>('kmoeThrottle', null); }
+  setKmoeThrottle(state: ThrottleState) { this.setValue('kmoeThrottle', state); }
 }

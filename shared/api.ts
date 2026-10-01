@@ -181,10 +181,6 @@ export type QueryOf<K extends EndpointKey> = Field<K, 'query'> extends z.ZodType
 type ParamNames<P extends string> = P extends `${string}:${infer Name}/${infer Rest}` ? Name | ParamNames<`/${Rest}`> : P extends `${string}:${infer Name}` ? Name : never;
 export type ParamsOf<K extends EndpointKey> = K extends `${string} ${infer Path}` ? [ParamNames<Path>] extends [never] ? undefined : Record<ParamNames<Path>, string | number> : undefined;
 
-/** Error body for every non-2xx JSON response. */
-export const ApiError = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
-export type ApiErrorBody = z.infer<typeof ApiError>;
-
 /**
  * Non-JSON routes:
  *   GET  /api/events          text/event-stream of ServerEvent (session cookie auth)

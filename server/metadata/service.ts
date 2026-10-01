@@ -10,7 +10,7 @@ import { AI_CONFIDENT, type AiService, type FolderFacts } from '../ai/service';
 import { json, now, type DB } from '../db';
 import type { EventHub } from '../events';
 import { AppError } from '../http/errors';
-import { sameOrigin, type Sealer } from '../lib/crypto';
+import { sameOrigin } from '../lib/crypto';
 import { connectionProblem, errorMessage, isRetryable, transient } from '../lib/retry';
 import type { ActivityLog } from '../services/activity';
 import type { ComicService, ItemRow } from '../services/comics';
@@ -32,7 +32,7 @@ import { seriesText, syncSeries, type Written } from './sync';
 import { fold } from './text';
 
 export interface MetadataDeps {
-  db: DB; hub: EventHub; sealer: Sealer; settings: SettingsStore; activity: ActivityLog; comics: ComicService; targets: TargetService;
+  db: DB; hub: EventHub; settings: SettingsStore; activity: ActivityLog; comics: ComicService; targets: TargetService;
   kmoe: KmoeService; jobs: JobRunner; fetch?: typeof fetch;
   /** DATA_DIR; the offline Bangumi data goes to DATA_DIR/bangumi (default: next to the database file). */
   dataDir?: string;
@@ -123,20 +123,20 @@ export class MetadataService {
 
   constructor(private readonly deps: MetadataDeps) {
     // The proxy used to be a Bangumi setting; it is the app-wide one now (settings.proxy).
-    const legacy = this.read<{ bangumi?: { proxy?: string } }>(KEY);
+    const legacy = deps.settings.value<{ bangumi?: { proxy?: string } } | null>(KEY, null);
     if (legacy?.bangumi?.proxy !== undefined) {
       if (legacy.bangumi.proxy && !deps.settings.get().proxy) deps.settings.patch({ proxy: legacy.bangumi.proxy });
       delete legacy.bangumi.proxy;
-      this.write(KEY, legacy);
+      deps.settings.setValue(KEY, legacy);
     }
     this.net = proxied(deps.fetch ?? fetch, () => deps.settings.get().proxy);
-    this.online = new BangumiClient({ db: deps.db, fetch: this.net, token: () => this.secret(TOKEN) });
+    this.online = new BangumiClient({ db: deps.db, fetch: this.net, token: () => deps.settings.secret(TOKEN) });
     const file = deps.db.filename;
     const dataDir = deps.dataDir ?? (file && file !== ':memory:' ? dirname(file) : join(tmpdir(), 'kmoesync'));
     this.offline = new OfflineData(join(dataDir, 'bangumi'), {
       fetch: () => this.net,
-      load: () => this.read<Partial<OfflineState>>(ARCHIVE),
-      save: state => this.write(ARCHIVE, state),
+      load: () => deps.settings.value<Partial<OfflineState> | null>(ARCHIVE, null),
+      save: state => deps.settings.setValue(ARCHIVE, state),
       status: archive => this.deps.hub.emit({ type: 'bangumi-archive', archive }),
       finished: result => this.archiveFinished(result),
     });
@@ -146,35 +146,19 @@ export class MetadataService {
   dispose(): Promise<void> { return this.offline.stop(); }
 
   // ---------- Settings ----------
-  private read<T>(key: string): T | null {
-    const row = this.deps.db.query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?').get(key);
-    return row ? json<T | null>(row.value, null) : null;
-  }
-  private write(key: string, value: unknown) {
-    this.deps.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', [key, JSON.stringify(value)]);
-  }
   private stored(): Stored {
-    const value = this.read<Partial<Stored>>(KEY) ?? {};
+    const value = this.deps.settings.value<Partial<Stored>>(KEY, {});
     return {
       enabled: value.enabled ?? false, komga: { ...DEFAULTS.komga, ...value.komga }, bangumi: { ...DEFAULTS.bangumi, ...value.bangumi },
       options: { ...DEFAULTS.options, ...value.options },
     };
   }
-  private secret(key: string): string | null {
-    const sealed = this.read<string>(key);
-    return sealed ? this.deps.sealer.open(Buffer.from(sealed, 'base64')) : null;
-  }
-  private setSecret(key: string, value: string) {
-    if (value) this.write(key, Buffer.from(this.deps.sealer.seal(value)).toString('base64'));
-    else this.deps.db.run('DELETE FROM settings WHERE key = ?', [key]);
-  }
-
   settings(): MetadataSettings {
     const { enabled, komga, bangumi, options } = this.stored();
     return {
       enabled,
-      komga: { url: komga.url, auth: komga.auth, username: komga.username, hasSecret: this.secret(SECRET) !== null, libraries: komga.libraries },
-      bangumi: { hasToken: this.secret(TOKEN) !== null, source: bangumi.source, online: this.onlineState(), archive: this.offline.status() },
+      komga: { url: komga.url, auth: komga.auth, username: komga.username, hasSecret: this.deps.settings.secret(SECRET) !== null, libraries: komga.libraries },
+      bangumi: { hasToken: this.deps.settings.secret(TOKEN) !== null, source: bangumi.source, online: this.onlineState(), archive: this.offline.status() },
       options,
     };
   }
@@ -196,13 +180,13 @@ export class MetadataService {
     }
     if (patch.bangumi?.source !== undefined) next.bangumi.source = patch.bangumi.source;
     for (const [key, value] of Object.entries(patch.options ?? {})) if (value !== undefined) Object.assign(next.options, { [key]: value });
-    this.write(KEY, next);
+    this.deps.settings.setValue(KEY, next);
     if (next.bangumi.source === 'archive' && current.bangumi.source !== 'archive' && !this.offline.reader.ready) this.offline.autoStart();
     // The saved key or password only ever goes to the server it was entered for: a new address needs it typed again.
-    if (komga?.secret !== undefined) this.setSecret(SECRET, komga.secret);
-    else if (current.komga.url && !sameOrigin(current.komga.url, next.komga.url)) this.setSecret(SECRET, '');
+    if (komga?.secret !== undefined) this.deps.settings.setSecret(SECRET, komga.secret);
+    else if (current.komga.url && !sameOrigin(current.komga.url, next.komga.url)) this.deps.settings.setSecret(SECRET, '');
     if (patch.bangumi?.token !== undefined) {
-      this.setSecret(TOKEN, patch.bangumi.token.trim());
+      this.deps.settings.setSecret(TOKEN, patch.bangumi.token.trim());
       // Searches differ with a token (R18 entries): forget the cached ones.
       this.deps.db.run("DELETE FROM bangumi_cache WHERE url LIKE 'https://api.bgm.tv/v0/search/%'");
     }
@@ -221,7 +205,7 @@ export class MetadataService {
     let url: string;
     try { url = draft.url !== undefined ? komgaUrl(draft.url) : saved.url; } catch (error) { return fail(errorMessage(error)); }
     const auth = draft.auth ?? saved.auth, username = draft.username?.trim() ?? saved.username;
-    const secret = draft.secret !== undefined ? draft.secret : sameOrigin(saved.url, url) ? this.secret(SECRET) ?? '' : '';
+    const secret = draft.secret !== undefined ? draft.secret : sameOrigin(saved.url, url) ? this.deps.settings.secret(SECRET) ?? '' : '';
     if (!url) return fail('请填写 Komga 地址');
     if (auth === 'basic' && !username) return fail('请填写 Komga 用户名（邮箱）');
     if (!secret) return fail(auth === 'apiKey' ? '请填写 Komga API Key' : '请填写 Komga 密码');
@@ -239,10 +223,10 @@ export class MetadataService {
 
   // ---------- Bangumi source: online API, or the offline archive where bgm.tv is blocked ----------
   private onlineState(): OnlineState {
-    return { reachable: null, checkedAt: null, error: null, ...this.read<Partial<OnlineState>>(ONLINE) };
+    return { reachable: null, checkedAt: null, error: null, ...this.deps.settings.value<Partial<OnlineState>>(ONLINE, {}) };
   }
   private setOnline(error: string | null) {
-    this.write(ONLINE, { reachable: error === null, checkedAt: now(), error } satisfies OnlineState);
+    this.deps.settings.setValue(ONLINE, { reachable: error === null, checkedAt: now(), error } satisfies OnlineState);
   }
 
   /** Whether api.bgm.tv answers, from a probe cached for an hour (15 minutes while blocked); concurrent callers share one probe. */
@@ -345,7 +329,7 @@ export class MetadataService {
 
   private komgaConfig(): KomgaConfig | null {
     const { komga } = this.stored();
-    const secret = this.secret(SECRET);
+    const secret = this.deps.settings.secret(SECRET);
     if (!komga.url || !secret || (komga.auth === 'basic' && !komga.username)) return null;
     return { url: komga.url, auth: komga.auth, username: komga.username, secret };
   }

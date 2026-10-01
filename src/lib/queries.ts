@@ -65,7 +65,7 @@ export const tasksQuery = (filter: TaskFilter) => infiniteQueryOptions({
  * Apply one task update to every cached task list: replace it, drop it from lists it no longer fits,
  * or insert it where it now belongs. Returns true when a list's membership or a status changed.
  */
-function patchTask(client: QueryClient, task: Task): boolean {
+export function patchTask(client: QueryClient, task: Task): boolean {
   let changed = false;
   for (const query of client.getQueryCache().findAll({ queryKey: ['tasks'] })) {
     const filter = query.queryKey[1] as TaskFilter;

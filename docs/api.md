@@ -41,9 +41,9 @@ Authorization: Bearer kms_xxxxxxxx
 示例：
 
 ```bash
-curl -s -H "Authorization: Bearer $TOKEN" http://nas:8080/api/v1/comics/8a3dbd
+curl -s -H "Authorization: Bearer $TOKEN" http://nas:5663/api/v1/comics/8a3dbd
 curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"comicKey":"8a3dbd","itemIds":["1001","1002"],"format":"epub","targetId":1}' http://nas:8080/api/v1/tasks
+  -d '{"comicKey":"8a3dbd","itemIds":["1001","1002"],"format":"epub","targetId":1}' http://nas:5663/api/v1/tasks
 ```
 
 ## MCP：`POST /mcp`
@@ -53,7 +53,7 @@ Streamable HTTP（无状态，JSON 响应），协议版本 2025-06-18 / 2025-03
 Claude Code：
 
 ```bash
-claude mcp add --transport http kmoesync http://nas:8080/mcp --header "Authorization: Bearer $TOKEN"
+claude mcp add --transport http kmoesync http://nas:5663/mcp --header "Authorization: Bearer $TOKEN"
 ```
 
 其他客户端（如 Claude Desktop、Cursor）按其 HTTP MCP 配置填写同样的地址与请求头。

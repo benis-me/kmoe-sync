@@ -55,19 +55,19 @@ function createCore(config: Config, options: AppOptions) {
   const db: DB = openDatabase(config.dataDir, options.database);
   const sealer = createSealer(config.secret);
   const hub = new EventHub();
-  const settings = new SettingsStore(db);
+  const settings = new SettingsStore(db, sealer);
   persistKmoeThrottle(settings.kmoeThrottle(), state => settings.setKmoeThrottle(state));
   /** fetch for everything that leaves the LAN (Bangumi lists, notifications): through 设置 → 网络代理 when set. */
   const net = proxied(options.fetch ?? fetch, () => settings.get().proxy);
   const notifier = new Notifier(() => settings.get().notifications, net);
   const activity = new ActivityLog(db, hub, notifier);
-  const ai = new AiService({ db, sealer, settings, fetch: options.fetch });
+  const ai = new AiService({ settings, fetch: options.fetch });
   const kmoe = new KmoeService(db, sealer, config.mirrors, () => settings.get().preferredMirror, options.fetch, () => settings.get().proxyKmoe ? settings.get().proxy : '');
   const targets = new TargetService(db, sealer, settings, config.libraryRoot);
   const comics = new ComicService(db, kmoe, hub, settings);
   const tasks = new TaskService(db, hub, settings, comics, targets);
   const jobs = new JobRunner(hub);
-  const metadata = new MetadataService({ db, hub, sealer, settings, activity, comics, targets, kmoe, jobs, fetch: options.fetch, dataDir: config.dataDir });
+  const metadata = new MetadataService({ db, hub, settings, activity, comics, targets, kmoe, jobs, fetch: options.fetch, dataDir: config.dataDir });
   const subscriptions = new SubscriptionService({ db, hub, comics, tasks, targets, settings, activity, pace: options.bulkPaceMs });
   const library = new LibraryService({ db, hub, comics, targets, kmoe, settings, jobs, metadata, subscriptions, activity, pace: options.bulkPaceMs });
   comics.hooks = { folder: (comicId, targetId) => library.comicFolder(comicId, targetId), metadata: id => metadata.forFolders([id]).get(id) ?? null };

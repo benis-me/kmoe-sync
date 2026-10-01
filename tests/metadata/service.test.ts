@@ -51,7 +51,7 @@ function setup(fixtures: Record<string, unknown> = {}, net: (next: typeof fetch)
   const events: ServerEvent[] = [];
   hub.subscribe(event => events.push(event));
   const sealer = createSealer(Buffer.alloc(32, 5));
-  const settings = new SettingsStore(db);
+  const settings = new SettingsStore(db, sealer);
   const activity = new ActivityLog(db, hub, new Notifier(() => []));
   const kmoe = new KmoeService(db, sealer, ['https://kzo.moe'], () => '');
   const targets = new TargetService(db, sealer, settings, join(root, 'library'));
@@ -61,7 +61,7 @@ function setup(fixtures: Record<string, unknown> = {}, net: (next: typeof fetch)
   const bgm = fakeBangumi(fixtures);
   const dataDir = mkdtempSync(join(root, 'data-'));
   const open = () => {
-    const service = new MetadataService({ db, hub, sealer, settings, activity, comics, targets, kmoe, jobs, fetch: net(bgm.fetch), dataDir });
+    const service = new MetadataService({ db, hub, settings, activity, comics, targets, kmoe, jobs, fetch: net(bgm.fetch), dataDir });
     services.push(service);
     return service;
   };
@@ -602,7 +602,7 @@ describe('AI', () => {
   const fakeAi = startFakeAi();
   afterAll(() => fakeAi.stop());
   const aiOf = (s: ReturnType<typeof setup>) => {
-    const ai = new AiService({ db: s.db, sealer: createSealer(Buffer.alloc(32, 6)), settings: s.settings });
+    const ai = new AiService({ settings: s.settings });
     ai.patch({ baseUrl: `${fakeAi.origin}/v1`, model: 'fake-chat', apiKey: 'sk-test' });
     return ai;
   };

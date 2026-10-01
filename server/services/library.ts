@@ -171,8 +171,7 @@ export class LibraryService {
   }
 
   private scannedAt(targetId: number): string | null {
-    const scanned = this.deps.db.query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?').get(`libraryScan:${targetId}`);
-    return scanned ? json<string | null>(scanned.value, null) : null;
+    return this.deps.settings.value<string | null>(`libraryScan:${targetId}`, null);
   }
 
   private touched(row: FolderRow) {
@@ -443,7 +442,7 @@ export class LibraryService {
         }
       }
     })();
-    db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', [`libraryScan:${targetId}`, JSON.stringify(time)]);
+    this.deps.settings.setValue(`libraryScan:${targetId}`, time);
     // New folders and ones whose books changed get their metadata written; the rest are as Komga already has them.
     for (const row of db.query<{ id: number; path: string; books: number }, [number]>('SELECT id, path, books FROM library_folders WHERE target_id = ?').all(targetId)) {
       if (before.get(row.path) !== row.books) this.deps.metadata.markDirty(row.id);

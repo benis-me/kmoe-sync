@@ -56,14 +56,12 @@ export function validateRule(rule: string): string {
   return text;
 }
 
-export const extensionOf = (format: Format) => format;
-
 /** Original file name from Content-Disposition or the site's link name, with the right extension. */
 export function fileInfo(name: string, header: string | null, title: string, chapter: string, format: Format) {
   let fromHeader = header?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   if (fromHeader) { try { fromHeader = decodeURIComponent(fromHeader); } catch { fromHeader = undefined; } }
   fromHeader ||= header?.match(/filename="([^"]+)"|filename=([^;]+)/i)?.slice(1).find(Boolean);
-  const ext = extensionOf(format);
+  const ext = format;
   const original = safeSegment(fromHeader || name || `${title}-${chapter}.${ext}`);
   const suffix = original.match(/\.(epub|mobi)$/i)?.[0];
   const stem = suffix ? original.slice(0, -suffix.length) : original;

@@ -15,7 +15,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "types": ["bun"],
-    "paths": { "@shared/*": ["./shared/*"] }
+    "paths": { "@/*": ["./src/*"], "@shared/*": ["./shared/*"] }
   },
-  "include": ["server", "shared", "tests", "scripts"]
+  "include": ["server", "shared", "tests", "scripts", "src/lib/api.ts", "src/lib/queries.ts"]
 }

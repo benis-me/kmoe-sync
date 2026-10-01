@@ -1,9 +1,9 @@
 // AI settings (endpoint, sealed key, model, proxy, monthly token budget), usage accounting, and the prompts the library
 // features use: judging candidates, suggesting search words, tidying metadata. All model calls go through client().
 import type { AiSettings, AiSettingsPatch, AiTestResult, AiVerdict, MetadataText } from '@shared/model';
-import { now, json, type DB } from '../db';
+import { now } from '../db';
 import { AppError } from '../http/errors';
-import { sameOrigin, type Sealer } from '../lib/crypto';
+import { sameOrigin } from '../lib/crypto';
 import { proxied } from '../lib/proxy';
 import { errorMessage } from '../lib/retry';
 import type { SettingsStore } from '../services/settings';
@@ -45,30 +45,20 @@ function describe(facts: FolderFacts): string {
 }
 
 export class AiService {
-  constructor(private readonly deps: { db: DB; sealer: Sealer; settings: SettingsStore; fetch?: typeof fetch }) {}
+  constructor(private readonly deps: { settings: SettingsStore; fetch?: typeof fetch }) {}
 
   // ---------- Settings ----------
-  private read<T>(key: string): T | null {
-    const row = this.deps.db.query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?').get(key);
-    return row ? json<T | null>(row.value, null) : null;
-  }
-  private write(key: string, value: unknown) {
-    this.deps.db.run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value', [key, JSON.stringify(value)]);
-  }
-  private stored(): Stored { return { ...DEFAULTS, ...this.read<Partial<Stored>>(KEY) }; }
-  private key(): string | null {
-    const sealed = this.read<string>(SECRET);
-    return sealed ? this.deps.sealer.open(Buffer.from(sealed, 'base64')) : null;
-  }
+  private stored(): Stored { return { ...DEFAULTS, ...this.deps.settings.value<Partial<Stored>>(KEY, {}) }; }
+  private key(): string | null { return this.deps.settings.secret(SECRET); }
   private usage(): { month: string; tokens: number } {
-    const usage = this.read<{ month: string; tokens: number }>(USAGE);
+    const usage = this.deps.settings.value<{ month: string; tokens: number } | null>(USAGE, null);
     return usage?.month === month() ? usage : { month: month(), tokens: 0 };
   }
   /** Tokens spent by one call (in-flight calls may pass the budget a little: it is checked before each call). */
   private count(tokens: number) {
     if (!Number.isFinite(tokens) || tokens <= 0) return;
     const usage = this.usage();
-    this.write(USAGE, { month: usage.month, tokens: usage.tokens + Math.round(tokens) });
+    this.deps.settings.setValue(USAGE, { month: usage.month, tokens: usage.tokens + Math.round(tokens) });
   }
 
   settings(): AiSettings {
@@ -92,14 +82,10 @@ export class AiService {
 
   patch(patch: AiSettingsPatch): AiSettings {
     const before = this.stored().baseUrl, next = this.merged(patch);
-    this.write(KEY, next);
+    this.deps.settings.setValue(KEY, next);
     // The saved key only ever goes to the service it was entered for: a new address needs it typed again.
-    if (patch.apiKey === undefined && before && !sameOrigin(before, next.baseUrl)) this.deps.db.run('DELETE FROM settings WHERE key = ?', [SECRET]);
-    if (patch.apiKey !== undefined) {
-      const key = patch.apiKey.trim();
-      if (key) this.write(SECRET, Buffer.from(this.deps.sealer.seal(key)).toString('base64'));
-      else this.deps.db.run('DELETE FROM settings WHERE key = ?', [SECRET]);
-    }
+    if (patch.apiKey !== undefined) this.deps.settings.setSecret(SECRET, patch.apiKey.trim());
+    else if (before && !sameOrigin(before, next.baseUrl)) this.deps.settings.setSecret(SECRET, '');
     return this.settings();
   }
 
