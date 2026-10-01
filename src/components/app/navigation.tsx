@@ -81,13 +81,19 @@ function SidebarStatus({ connected }: { connected: boolean }) {
   </section>;
 }
 
-/** Phone header: the page's name, then the page's own actions (portalled into `actions`), or else the queue while it runs. */
-export function TopBar({ title, actions }: { title: string; actions: (element: HTMLDivElement | null) => void }) {
+/**
+ * Phone header: the page's name, then the page's own actions (portalled into `actions`), or else the queue while it runs.
+ * The sidebar is hidden on phones, so a lost live connection shows here: until it is back, the numbers here are old.
+ */
+export function TopBar({ title, actions, connected }: { title: string; actions: (element: HTMLDivElement | null) => void; connected: boolean }) {
   const { data: status } = useQuery(statusQuery);
   return <header className="group/top sticky top-0 z-30 flex h-13 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur-md md:hidden">
     <span className="min-w-0 flex-1 truncate text-[17px] font-semibold tracking-tight">{title}</span>
     <MockBadge />
-    {status && (status.queue.paused || status.queue.counts.running > 0) && <Link to="/downloads" className="flex h-8 max-w-44 min-w-0 items-center rounded-full bg-card px-3 text-xs shadow-soft ring-1 ring-border outline-none group-has-[[data-actions]:not(:empty)]/top:hidden focus-visible:ring-2 focus-visible:ring-ring">
+    {!connected ? <span role="status" className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-card px-3 text-xs text-warning shadow-soft ring-1 ring-border">
+      <WifiOff className="size-3.5 shrink-0" />重连中
+    </span>
+    : status && (status.queue.paused || status.queue.counts.running > 0) && <Link to="/downloads" className="flex h-8 max-w-44 min-w-0 items-center rounded-full bg-card px-3 text-xs shadow-soft ring-1 ring-border outline-none group-has-[[data-actions]:not(:empty)]/top:hidden focus-visible:ring-2 focus-visible:ring-ring">
       <QueueLine queue={{ ...status.queue, speed: 0 }} className="gap-1.5 [&_svg]:size-3.5" />
     </Link>}
     <div ref={actions} data-actions className="flex shrink-0 items-center gap-2 empty:hidden" />

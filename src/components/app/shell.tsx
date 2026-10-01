@@ -47,7 +47,7 @@ export function Shell() {
     <div inert={covered} className="contents">
       <a href="#main" className="sr-only rounded-lg bg-card px-3 py-2 font-medium shadow-float ring-1 ring-border focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50">跳到内容</a>
       <Sidebar connected={connected} />
-      {!fullscreen && <TopBar title={title} actions={setActions} />}
+      {!fullscreen && <TopBar title={title} actions={setActions} connected={connected} />}
       <main ref={main} id="main" tabIndex={-1} className={cn('outline-none md:pl-60', !fullscreen && 'max-md:pb-[calc(60px+env(safe-area-inset-bottom))]')}>
         <motion.div key={page?.pathname} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}>
           <TopBarActions.Provider value={actions}><Outlet /></TopBarActions.Provider>

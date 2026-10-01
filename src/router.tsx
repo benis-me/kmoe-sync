@@ -81,7 +81,7 @@ const appRoute = createRoute({
 
 const shelfRoute = createRoute({
   getParentRoute: () => appRoute, path: '/', component: ShelfPage, staticData: { title: '书架' },
-  validateSearch: z.object({ filter: optional(z.enum(['tracking', 'updates', 'failed'])) }),
+  validateSearch: z.object({ filter: optional(z.enum(['tracking', 'updates', 'missing', 'failed'])) }),
 });
 
 const discoverRoute = createRoute({ getParentRoute: () => appRoute, path: 'discover', component: DiscoverLayout, staticData: { title: '发现' } });

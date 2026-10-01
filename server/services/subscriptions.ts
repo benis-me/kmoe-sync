@@ -134,7 +134,7 @@ export class SubscriptionService {
       if (relevant.length) {
         const names = relevant.map(item => item.name).join('、');
         activity.add({
-          kind: 'new_items', level: 'info', comicId: comic.id, title: `《${comics.byId(comic.id).title}》更新了 ${relevant.length} 项`,
+          kind: 'new_items', level: 'info', comicId: comic.id, title: `《${comics.byId(comic.id).title}》更新了 ${relevant.length} 项`, url: comics.seriesUrl(comic.id, subscription.targetId),
           detail: `${names.length > 100 ? `${names.slice(0, 97)}…` : names}${result.created ? `，已加入下载队列` : ''}`,
         });
       }

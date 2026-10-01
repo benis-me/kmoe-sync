@@ -2,7 +2,7 @@ import { useState, type RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, LoaderCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from 'cn';
-import type { ComicDetail } from '@shared/model';
+import { followedTypes, type ComicDetail } from '@shared/model';
 import { fromNow } from '@/lib/format';
 import { aiSettingsQuery } from '@/lib/queries';
 import { useAssistant } from '@/stores/assistant';
@@ -17,7 +17,9 @@ export function ComicHeader({ detail, kmoeUrl, refreshing, onRefresh, titleRef }
 }) {
   const { comic, subscription, items } = detail;
   const [expanded, setExpanded] = useState(false);
-  const fresh = items.filter(item => item.isNew).length;
+  // New items of the kinds followed, counted like the shelf.
+  const followed = followedTypes(subscription?.types, items.filter(item => detail.states[item.id]?.state === 'downloaded').map(item => item.type));
+  const fresh = items.filter(item => item.isNew && followed.includes(item.type)).length;
   const long = (comic.description?.length ?? 0) > 90;
   const { data: aiReady = false } = useQuery({ ...aiSettingsQuery, select: settings => settings.ready });
   const askAi = useAssistant(state => state.show);

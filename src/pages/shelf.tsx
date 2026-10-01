@@ -20,11 +20,12 @@ import { ComicCard } from '@/features/shelf/comic-card';
 import { CheckAllButton, Onboarding, StatusStrip } from '@/features/shelf/overview';
 
 const route = getRouteApi('/_app/');
-type Filter = 'all' | 'tracking' | 'updates' | 'failed';
+type Filter = 'all' | 'tracking' | 'updates' | 'missing' | 'failed';
 const FILTERS: { value: Filter; label: string; test: (entry: ShelfEntry) => boolean }[] = [
   { value: 'all', label: '全部', test: () => true },
   { value: 'tracking', label: '追更中', test: entry => !!entry.subscription?.enabled },
   { value: 'updates', label: '有更新', test: entry => entry.counts.new > 0 },
+  { value: 'missing', label: '缺卷', test: entry => entry.counts.downloaded + entry.counts.queued < entry.counts.items },
   { value: 'failed', label: '有失败', test: entry => entry.counts.failed > 0 },
 ];
 

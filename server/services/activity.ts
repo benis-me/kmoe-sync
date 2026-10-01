@@ -26,7 +26,8 @@ export class ActivityLog {
    * Records an event. With `merge`, an entry of the same kind for the same comic from the last few minutes is updated
    * instead (e.g. many finished downloads become one line); notifications are only sent for new entries.
    */
-  add(input: { kind: Kind; level: Level; title: string; detail?: string | null; comicId?: number | null; merge?: (previous: { title: string; detail: string | null }) => { title: string; detail: string | null } }) {
+  /** `url`: where a push notification opens (the Komga series when there is one). */
+  add(input: { kind: Kind; level: Level; title: string; detail?: string | null; comicId?: number | null; url?: string | null; merge?: (previous: { title: string; detail: string | null }) => { title: string; detail: string | null } }) {
     if (input.merge && input.comicId) {
       const recent = this.db.query<{ id: number; title: string; detail: string | null }, [string, number]>(
         "SELECT id, title, detail FROM activity WHERE kind = ? AND comic_id = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-10 minutes') ORDER BY id DESC LIMIT 1").get(input.kind, input.comicId);
@@ -44,6 +45,6 @@ export class ActivityLog {
     const row = this.select('WHERE a.id = ?', [Number(result.lastInsertRowid)])[0];
     if (row) this.hub.emit({ type: 'activity', activity: this.dto(row) });
     const event = NOTIFY[input.kind];
-    if (event) this.notifier.send({ event, title: input.title, detail: input.detail });
+    if (event) this.notifier.send({ event, title: input.title, detail: input.detail, url: input.url });
   }
 }

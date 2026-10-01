@@ -1,5 +1,5 @@
 // Comics and their items: cached from Kmoe, merged with what this service has queued, delivered or found in a library.
-import type { ComicDetail, ComicFolder, ComicSummary, FolderMetadata, Format, Item, ItemStateInfo, LibraryCheck, SearchResult, ShelfEntry, Subscription } from '@shared/model';
+import { followedTypes, type ComicDetail, type ComicFolder, type ComicSummary, type ContentType, type FolderMetadata, type Format, type Item, type ItemStateInfo, type LibraryCheck, type SearchResult, type ShelfEntry, type Subscription } from '@shared/model';
 import { json, now, type DB } from '../db';
 import type { EventHub } from '../events';
 import { AppError } from '../http/errors';
@@ -21,6 +21,9 @@ const MAX_AGE_MS = 10 * 60_000;
 const TYPE_RANK = { volume: 0, extra: 1, serial: 2 } as const;
 
 export const itemSize = (item: Pick<ItemRow, 'epub_mb' | 'mobi_mb'>, format: Format) => (format === 'epub' ? item.epub_mb : item.mobi_mb) ?? 0;
+/** New: from the latest check that found items, and first seen within two weeks (it does not stay new for good). */
+const NEW_FOR_MS = 14 * 86_400_000;
+const isFresh = (item: ItemRow) => item.is_new === 1 && Date.now() - Date.parse(item.first_seen_at) < NEW_FOR_MS;
 
 /** Folder/metadata lookups supplied by the library and metadata services (wired in app.ts). */
 export interface ComicHooks {
@@ -217,7 +220,7 @@ export class ComicService {
       comic: { ...this.summary(row), bookId: row.book_id ?? '', description: row.description, status: row.status, fetchedAt: row.fetched_at ?? now() },
       items: this.items(row.id).map(item => ({
         id: item.remote_id, type: item.type, name: item.name, order: item.sort_order, pages: item.pages,
-        sizeMB: { epub: item.epub_mb, mobi: item.mobi_mb }, isNew: item.is_new === 1,
+        sizeMB: { epub: item.epub_mb, mobi: item.mobi_mb }, isNew: isFresh(item),
       })),
       subscription: subscription ? this.subscriptionDto(subscription, row.key) : null,
       view,
@@ -225,6 +228,11 @@ export class ComicService {
       library: view.targetId === null ? null : this.library(row.id, view.targetId, view.format),
       ...this.folderInfo(row.id, view.targetId),
     };
+  }
+
+  /** The comic's series in Komga's web UI (its folder on this target, synced), for notifications to open. */
+  seriesUrl(comicId: number, targetId: number): string | null {
+    return this.folderInfo(comicId, targetId).metadata?.komga.seriesUrl ?? null;
   }
 
   private folderInfo(comicId: number, targetId: number | null): { folder: ComicFolder | null; metadata: FolderMetadata | null } {
@@ -243,21 +251,24 @@ export class ComicService {
       WHERE s.id IS NOT NULL OR t.id IS NOT NULL OR EXISTS (SELECT 1 FROM deliveries d JOIN items i ON i.id = d.item_id WHERE i.comic_id = c.id)
         OR EXISTS (SELECT 1 FROM library_folders f WHERE f.comic_id = c.id)
       GROUP BY c.id`).all();
-    const fresh = this.db.query<{ n: number }, [number]>('SELECT COUNT(*) AS n FROM items WHERE comic_id = ? AND is_new = 1 AND gone_at IS NULL');
     return rows.map(row => {
       const subscription = this.subscriptionRow(row.id);
       const view = this.view(row.id, {}, defaultTarget);
-      const states = Object.values(view.targetId === null ? {} : this.states(row.id, view.targetId, view.format));
+      const byItem = view.targetId === null ? {} : this.states(row.id, view.targetId, view.format);
+      const items = this.items(row.id);
+      // Only the kinds of items followed: volumes alone are not 12/300 because of 300 chapters nobody wants.
+      const types = followedTypes(subscription ? json<ContentType[]>(subscription.types, []) : null, items.filter(item => byItem[item.remote_id]?.state === 'downloaded').map(item => item.type));
+      const followed = items.filter(item => types.includes(item.type)), states = followed.map(item => byItem[item.remote_id]?.state);
       const { metadata } = this.folderInfo(row.id, view.targetId);
       return {
         comic: { ...this.summary(row), tracked: true },
         subscription: subscription ? this.subscriptionDto(subscription, row.key) : null,
         counts: {
-          items: this.items(row.id).length,
-          downloaded: states.filter(state => state.state === 'downloaded').length,
-          queued: states.filter(state => state.state === 'queued' || state.state === 'running').length,
-          failed: states.filter(state => state.state === 'failed').length,
-          new: fresh.get(row.id)!.n,
+          items: followed.length,
+          downloaded: states.filter(state => state === 'downloaded').length,
+          queued: states.filter(state => state === 'queued' || state === 'running').length,
+          failed: states.filter(state => state === 'failed').length,
+          new: followed.filter(isFresh).length,
         },
         lastActivityAt: row.last_activity || null,
         metadata: metadata ? { bangumi: metadata.bangumi.state, komga: metadata.komga.state } : null,

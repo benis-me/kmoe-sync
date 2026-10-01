@@ -12,6 +12,7 @@ import { errorMessage, isRetryable } from '../lib/retry';
 import { inspectLibrary } from '../storage';
 import { StorageError } from '../storage/types';
 import type { MetadataService } from '../metadata/service';
+import type { ActivityLog } from './activity';
 import type { ComicService } from './comics';
 import type { JobContext, JobRunner } from './jobs';
 import type { KmoeService } from './kmoe';
@@ -111,7 +112,7 @@ const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, r
 export class LibraryService {
   constructor(private readonly deps: {
     db: DB; hub: EventHub; comics: ComicService; targets: TargetService; kmoe: KmoeService; settings: SettingsStore; jobs: JobRunner; metadata: MetadataService;
-    subscriptions: SubscriptionService;
+    subscriptions: SubscriptionService; activity: ActivityLog;
     /** Spacing between Kmoe requests in bulk jobs (tests shorten it). */
     pace?: number;
   }) {}
@@ -619,6 +620,14 @@ export class LibraryService {
     }
     context.progress({ done: rows.length, current: null });
     this.deps.hub.emit({ type: 'shelf' });
+    // Matching takes 10 s a folder: the outcome goes to the activity feed (and the shelf), not only to this page.
+    if (!rows.length) return;
+    const after = rows.flatMap(row => this.deps.db.query<{ kmoe_state: KmoeLinkState; kmoe_error: string | null }, [number]>('SELECT kmoe_state, kmoe_error FROM library_folders WHERE id = ?').get(row.id) ?? []);
+    const count = (state: KmoeLinkState) => after.filter(row => row.kmoe_state === state).length, failed = after.filter(row => row.kmoe_error).length;
+    this.deps.activity.add({
+      kind: 'info', level: failed ? 'warning' : 'success',
+      title: `Kmoe 匹配：关联 ${count('matched')} 部，待确认 ${count('suggested')} 部，未找到 ${count('unmatched')} 部${failed ? `，失败 ${failed} 部` : ''}`,
+    });
   }
 
   private requireKmoe() {
@@ -687,6 +696,7 @@ export class LibraryService {
     this.requireKmoe();
     return this.deps.jobs.start('follow', targetId, async context => {
       const rows = this.unfollowed(targetId);
+      let failed = 0;
       context.progress({ total: rows.length, done: 0 });
       for (const [index, row] of rows.entries()) {
         context.signal.throwIfAborted();
@@ -701,11 +711,13 @@ export class LibraryService {
           // Kmoe out of reach: the rest would fail the same way. Those done stay followed; starting again does the rest.
           if (error instanceof KmoeError && error.code === 'network') throw error;
           this.fail(row, error);
+          failed++;
         }
         this.deps.hub.emit({ type: 'folders', targetId });
         await sleep(this.pace, context.signal);
       }
       context.progress({ done: rows.length, current: null });
+      this.deps.activity.add({ kind: 'info', level: failed ? 'warning' : 'success', title: `追更：订阅了 ${rows.length - failed} 部连载（仅追新）${failed ? `，失败 ${failed} 部` : ''}` });
     });
   }
 

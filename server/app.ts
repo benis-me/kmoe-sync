@@ -69,7 +69,7 @@ function createCore(config: Config, options: AppOptions) {
   const jobs = new JobRunner(hub);
   const metadata = new MetadataService({ db, hub, sealer, settings, activity, comics, targets, kmoe, jobs, fetch: options.fetch, dataDir: config.dataDir });
   const subscriptions = new SubscriptionService({ db, hub, comics, tasks, targets, settings, activity, pace: options.bulkPaceMs });
-  const library = new LibraryService({ db, hub, comics, targets, kmoe, settings, jobs, metadata, subscriptions, pace: options.bulkPaceMs });
+  const library = new LibraryService({ db, hub, comics, targets, kmoe, settings, jobs, metadata, subscriptions, activity, pace: options.bulkPaceMs });
   comics.hooks = { folder: (comicId, targetId) => library.comicFolder(comicId, targetId), metadata: id => metadata.forFolders([id]).get(id) ?? null };
   library.backfill();
   const worker = new Worker({ db, tasks, comics, targets, kmoe, settings, activity, library, tmpDir: join(config.dataDir, 'tmp') });

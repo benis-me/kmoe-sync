@@ -15,7 +15,7 @@ export async function deliver(channel: Channel, message: Message, fetchImpl: typ
       body: JSON.stringify({ title: message.title, body: body || message.title, group: 'Kmoe Sync', ...(message.url ? { url: message.url } : {}) }) });
   } else {
     response = await fetchImpl(`https://api.telegram.org/bot${channel.token}/sendMessage`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: channel.chatId, text: body ? `${message.title}\n${body}` : message.title, disable_web_page_preview: true }) });
+      body: JSON.stringify({ chat_id: channel.chatId, text: [message.title, body, message.url].filter(Boolean).join('\n'), disable_web_page_preview: true }) });
   }
   if (!response.ok) throw new Error(`${channel.name}：HTTP ${response.status}`);
 }

@@ -4,6 +4,9 @@ import { z } from 'zod';
 export const ContentType = z.enum(['volume', 'extra', 'serial']);
 export type ContentType = z.infer<typeof ContentType>;
 export const CONTENT_LABELS: Record<ContentType, string> = { volume: '单行本', extra: '番外', serial: '连载话' };
+/** The kinds of items a comic's progress and new items count: its subscription's, else those downloaded, else volumes. */
+export const followedTypes = (subscribed: readonly ContentType[] | null | undefined, downloaded: readonly ContentType[]): ContentType[] =>
+  subscribed?.length ? [...subscribed] : downloaded.length ? [...new Set(downloaded)] : ['volume'];
 
 export const Format = z.enum(['epub', 'mobi']);
 export type Format = z.infer<typeof Format>;

@@ -231,7 +231,7 @@ export class Worker {
       tasks.emit(task.id);
       try { this.deps.library.recordDelivery(comic.id, task.target_id, path); } catch (error) { console.error(`[task ${task.id}] library folder`, error); }
       this.deps.activity.add({
-        kind: 'download_done', level: 'success', comicId: comic.id, title: `《${comic.title}》下载了 1 个文件`, detail: item.name,
+        kind: 'download_done', level: 'success', comicId: comic.id, title: `《${comic.title}》下载了 1 个文件`, detail: item.name, url: comics.seriesUrl(comic.id, task.target_id),
         merge: previous => {
           const count = Number(/下载了 (\d+) 个文件/.exec(previous.title)?.[1] ?? 1) + 1;
           const names = `${previous.detail ?? ''}、${item.name}`.replace(/^、/, '');
