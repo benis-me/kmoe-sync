@@ -148,7 +148,7 @@ export function createHandlers(app: App): Handlers {
     'POST /api/network/test': ({ body }) => metadata.testNetwork(body.proxy, body.kmoe ? kmoe.origin() : null),
     'POST /api/notifications/test': async ({ body }) => {
       try {
-        await deliver(body, { event: 'new_items', title: 'Kmoe Sync 测试通知', detail: '看到这条消息说明通知渠道已配置成功。' }, app.net);
+        await deliver(settings.unmask(body), { event: 'new_items', title: 'Kmoe Sync 测试通知', detail: '看到这条消息说明通知渠道已配置成功。' }, app.net);
         return { ok: true, message: '已发送测试通知' };
       } catch (error) { return { ok: false, message: errorMessage(error) }; }
     },

@@ -42,7 +42,8 @@ function loadSecret(dataDir: string): Buffer {
     if (fromEnv.length < 32) throw new Error('KMOESYNC_SECRET must be at least 32 characters');
     return Buffer.from(fromEnv);
   }
-  const file = join(dataDir, 'secret.key');
+  // Another mount than /data keeps the key out of copies of the data; same base64 format, so a secret.key moves as it is.
+  const file = env('KMOESYNC_SECRET_FILE') ?? join(dataDir, 'secret.key');
   if (existsSync(file)) return Buffer.from(readFileSync(file, 'utf8').trim(), 'base64');
   const secret = randomBytes(32);
   writeFileSync(file, secret.toString('base64'), { mode: 0o600 });

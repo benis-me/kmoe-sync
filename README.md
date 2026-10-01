@@ -171,14 +171,20 @@ NAS 连不上镜像仓库时，可以在电脑上打包，让 NAS 从局域网�
 | `DATA_DIR` | `/data` | 数据目录 |
 | `LIBRARY_ROOT` | `/library` | 本地书库根目录；本地存储位置都在它之下 |
 | `PUID` / `PGID` / `UMASK` | 空 | 以指定用户运行，写入的文件归该用户所有 |
-| `KMOESYNC_SECRET` | 自动生成 | 加密 Kmoe 会话（及记住的 Kmoe 密码）、WebDAV 密码和 API Key 的密钥（≥32 字符）；不设置时生成在 `data/secret.key` |
+| `KMOESYNC_SECRET_FILE` | `data/secret.key` | 密钥文件的位置：加密 Kmoe 会话（及记住的 Kmoe 密码）、WebDAV 密码、Komga 凭据和 API Key。放到 `/data` 以外的挂载点，`data/` 的备份里就没有密钥；改位置前先把现有的 `secret.key` 复制过去，否则会生成新密钥 |
+| `KMOESYNC_SECRET` | 不设置 | 直接给出密钥（≥32 字符）。这是另一把密钥，设置后已加密的会话和凭据都要重新登录、重新填写；想保留现有数据请用 `KMOESYNC_SECRET_FILE` |
 | `KMOESYNC_SECURE_COOKIES` | 关 | 设为 `1` 时登录 Cookie 带 `Secure`（在 HTTPS 反向代理后面使用） |
 | `KMOESYNC_MIRRORS` | 官方镜像 | 逗号分隔的镜像域名，覆盖内置列表 |
 | `STATIC_DIR` | `/app/web` | 网页文件目录（镜像内已包含） |
 
 版本号、运行环境、运行用户（UID/GID）、数据目录和各项设置的概况在 **设置 → 关于** 里。
 
-**备份**：整个 `data/` 目录，尤其是 `secret.key`（丢失后需要重新登录 Kmoe、重新填写 WebDAV 密码和 AI 的 API Key）。
+**备份**：
+
+- 数据库运行时一直在写，直接复制可能拿到不一致的副本：先停容器再复制 `data/`，或者用群晖的 Btrfs 快照。
+- 升级到数据库结构有变化的版本时，会先在 `data/` 里留一份 `kmoesync.db.v<旧版本>.bak`：回退到旧镜像时，用它替换 `kmoesync.db`。
+- `covers/`、`bangumi/`、`tmp/` 都能重新生成，不用备份。
+- 密钥（`secret.key`）和数据分开存放：丢了它要重新登录 Kmoe、重新填写各处凭据；和数据放在一起，任何一份 `data/` 备份都能解开记住的 Kmoe 密码。
 
 ### 元数据如何自动更新
 
@@ -213,7 +219,7 @@ NAS 连不上镜像仓库时，可以在电脑上打包，让 NAS 从局域网�
 ## 安全
 
 - 单管理员：argon2id 密码、HttpOnly 会话 Cookie、CSRF 令牌、登录失败逐次减速。
-- Kmoe 密码默认只用于登录那一次，保存的是加密后的会话 Cookie（AES-256-GCM）。勾选「记住密码」时密码同样加密保存，只用来在登录失效后自动重新登录：Kmoe 拒绝那次登录时自动删除，退出登录也会删除。密钥默认和数据一起放在 `data/` 里，打开这个选项时建议用 `KMOESYNC_SECRET` 把密钥放到别处。WebDAV 密码、Komga 凭据和 AI 的 API Key 同样加密存储。
+- Kmoe 密码默认只用于登录那一次，保存的是加密后的会话 Cookie（AES-256-GCM）。勾选「记住密码」时密码同样加密保存，只用来在登录失效后自动重新登录：Kmoe 拒绝那次登录时自动删除，退出登录也会删除。密钥默认和数据一起放在 `data/` 里，打开这个选项时建议用 `KMOESYNC_SECRET_FILE` 把密钥放到别的挂载点（先把现有的 `secret.key` 复制过去）。WebDAV 密码、Komga 凭据和 AI 的 API Key 同样加密存储。
 - 建议只在局域网或经 HTTPS 反向代理访问；REST API / MCP 需要单独生成的令牌，而且只能操作漫画、订阅和下载。
 - 发现安全问题请看 [SECURITY.md](SECURITY.md)，不要公开提 Issue。
 

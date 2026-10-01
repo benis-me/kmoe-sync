@@ -19,6 +19,10 @@ export const DEFAULTS: SettingsValue = {
   proxyKmoe: false,
 };
 
+/** Shown instead of a saved bot token or Bark key; sent back unchanged it means "keep the saved one". */
+export const SECRET_MASK = '••••••••';
+const masked = (channel: Channel): Channel => channel.kind === 'telegram' ? { ...channel, token: SECRET_MASK } : channel.kind === 'bark' ? { ...channel, key: SECRET_MASK } : channel;
+
 export class SettingsStore {
   constructor(private readonly db: DB) {}
 
@@ -34,10 +38,20 @@ export class SettingsStore {
     const stored = this.read<Partial<SettingsValue>>('app', {});
     return { ...DEFAULTS, ...stored };
   }
+  /** What the page gets: notification secrets (bot tokens, Bark keys) never leave the server, like other passwords. */
   view(): Settings {
-    return Settings.parse({ ...this.get(), apiToken: Boolean(this.apiTokenHash()) });
+    const value = this.get();
+    return Settings.parse({ ...value, notifications: value.notifications.map(masked), apiToken: Boolean(this.apiTokenHash()) });
   }
-  patch(patch: SettingsPatch): SettingsValue {
+  /** A channel from the page with a masked secret: the saved channel's secret is put back. */
+  unmask(channel: Channel): Channel {
+    const saved = this.get().notifications.find(entry => entry.id === channel.id);
+    if (channel.kind === 'telegram' && channel.token === SECRET_MASK) return { ...channel, token: saved?.kind === 'telegram' ? saved.token : '' };
+    if (channel.kind === 'bark' && channel.key === SECRET_MASK) return { ...channel, key: saved?.kind === 'bark' ? saved.key : '' };
+    return channel;
+  }
+  patch(input: SettingsPatch): SettingsValue {
+    const patch = input.notifications ? { ...input, notifications: input.notifications.map(channel => this.unmask(channel)) } : input;
     const next = { ...this.get(), ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) } as SettingsValue;
     this.write('app', next);
     return next;

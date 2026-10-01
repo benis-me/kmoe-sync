@@ -1,6 +1,6 @@
 // SQLite storage (bun:sqlite, WAL). Forward-only migrations; each entry runs once inside a transaction.
 import { Database } from 'bun:sqlite';
-import { chmodSync } from 'node:fs';
+import { chmodSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const MIGRATIONS: string[] = [
@@ -114,19 +114,31 @@ const MIGRATIONS: string[] = [
 export type DB = Database;
 
 export function openDatabase(dataDir: string, file = 'kmoesync.db'): DB {
-  const db = new Database(file === ':memory:' ? ':memory:' : join(dataDir, file), { create: true, strict: true });
+  const path = file === ':memory:' ? null : join(dataDir, file);
+  const db = new Database(path ?? ':memory:', { create: true, strict: true });
   db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
-  migrate(db);
+  migrate(db, path);
   // Sessions and sealed secrets live here: keep the files private like secret.key (best effort on NAS filesystems).
   if (file !== ':memory:') for (const suffix of ['', '-wal', '-shm']) { try { chmodSync(join(dataDir, file + suffix), 0o600); } catch { /* not created yet or not supported */ } }
   return db;
 }
 
-export function migrate(db: DB) {
+/**
+ * Brings the schema up to date. Before changing an existing database it leaves a consistent copy next to it
+ * (`<file>.v<version>.bak`, readable only by its owner like the database): going back to the previous image needs it.
+ */
+export function migrate(db: DB, path: string | null = null) {
   db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)');
   const row = db.query<{ version: number }, []>('SELECT version FROM schema_version').get();
   let version = row?.version ?? 0;
   if (!row) db.run('INSERT INTO schema_version (version) VALUES (0)');
+  if (version > MIGRATIONS.length) throw new Error(`数据库来自更新的版本（结构 v${version}，这个版本只认识到 v${MIGRATIONS.length}），请使用新的镜像`);
+  if (path && version > 0 && version < MIGRATIONS.length) {
+    const backup = `${path}.v${version}.bak`;
+    rmSync(backup, { force: true });
+    db.run('VACUUM INTO ?', [backup]);
+    try { chmodSync(backup, 0o600); } catch { /* not supported */ }
+  }
   for (; version < MIGRATIONS.length; version++) {
     db.transaction(() => {
       db.exec(MIGRATIONS[version]!);

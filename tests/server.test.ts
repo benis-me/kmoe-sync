@@ -84,6 +84,26 @@ describe('admin auth', () => {
   });
 });
 
+describe('admin login', () => {
+  test('guesses sent in parallel are checked two at a time; the others are turned away at once', async () => {
+    const attempt = () => fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'a wrong guess' }) }).then(response => response.status);
+    const statuses = await Promise.all([attempt(), attempt(), attempt(), attempt()]);
+    expect(statuses.sort()).toEqual([401, 401, 429, 429]);
+  });
+});
+
+describe('notification channels', () => {
+  test('a bot token never comes back to the page; sent back masked, the saved one stays', async () => {
+    const channel = { id: 'tg', name: 'Telegram', kind: 'telegram', token: '123:bot-secret', chatId: '42', enabled: true, events: ['new_items'] };
+    await api('PATCH', '/api/settings', { notifications: [channel] });
+    const { data } = await api('GET', '/api/settings');
+    expect(JSON.stringify(data)).not.toContain('bot-secret');
+    await api('PATCH', '/api/settings', { notifications: data.notifications.map((entry: object) => ({ ...entry, name: 'Telegram 群' })) });
+    expect(app.settings.get().notifications).toMatchObject([{ name: 'Telegram 群', token: '123:bot-secret' }]);
+    await api('PATCH', '/api/settings', { notifications: [] });
+  });
+});
+
 describe('kmoe + downloads', () => {
   let targetId = 0;
 

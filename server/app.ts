@@ -194,8 +194,8 @@ export function createApp(config: Config, options: AppOptions = {}) {
   const handlers = createHandlers(app);
   const mcp = mcpHandler(app, handlers);
   const requireSession = (req: Request) => { if (!auth.session(req) && !app.tokenValid(req)) throw new AppError(401, 'unauthenticated', '请先登录'); };
-  const guard = (handler: (req: Request & { params: Record<string, string> }) => Promise<Response> | Response) =>
-    async (req: Request & { params: Record<string, string> }) => { try { return await handler(req); } catch (error) { return errorResponse(error); } };
+  const guard = (handler: (req: Request & { params: Record<string, string> }, server: Server<unknown>) => Promise<Response> | Response) =>
+    async (req: Request & { params: Record<string, string> }, server: Server<unknown>) => { try { return await handler(req, server); } catch (error) { return errorResponse(error); } };
 
   const routes: Routes = {
     ...buildRoutes(handlers, auth, app.tokenValid),
@@ -206,17 +206,20 @@ export function createApp(config: Config, options: AppOptions = {}) {
       }
       return Response.json({ ok: true, version: VERSION });
     } },
-    '/api/events': { GET: guard(req => {
+    // Live updates and the assistant's answer stream for as long as they take: no idle timeout for these two.
+    '/api/events': { GET: guard((req, server) => {
       const session = auth.session(req);
       if (!session) throw new AppError(401, 'unauthenticated', '请先登录');
+      server.timeout(req, 0);
       return sseResponse(hub, [{ type: 'status', status: app.status() }], req.signal);
     }) },
     '/api/covers/:key': { GET: guard(req => { requireSession(req); return cover(req.params.key ?? ''); }) },
     // The assistant streams its answer (newline-delimited JSON), so it is not a typed JSON endpoint.
-    '/api/ai/chat': { POST: guard(req => {
+    '/api/ai/chat': { POST: guard((req, server) => {
       const session = auth.session(req);
       if (!session) throw new AppError(401, 'unauthenticated', '请先登录');
       auth.checkCsrf(req, session);
+      server.timeout(req, 0);
       return chatResponse(req, app, toolCaller(handlers, 'session'));
     }) },
     '/mcp': { POST: mcp, GET: mcp, DELETE: mcp },
@@ -319,7 +322,8 @@ export function createApp(config: Config, options: AppOptions = {}) {
       claimInstance();
       // Bind first: a second instance on the same data (e.g. `docker exec ... kmoesync`) must fail here,
       // before its worker touches running tasks or temp files.
-      server = Bun.serve({ hostname: config.host, port: config.port, routes, fetch: serveStatic, idleTimeout: 0, error: errorResponse });
+      // Two minutes covers the slowest request (a Kmoe page with its retries); a connection idle longer is closed.
+      server = Bun.serve({ hostname: config.host, port: config.port, routes, fetch: serveStatic, idleTimeout: 120, error: errorResponse });
       heartbeat = setInterval(() => { try { db.run("UPDATE meta SET value = ? WHERE key = 'instance'", [JSON.stringify({ id: instanceId, at: Date.now() })]); } catch { /* disk full: health reports it */ } }, 15_000);
       worker.start();
       if (options.scheduler !== false) {

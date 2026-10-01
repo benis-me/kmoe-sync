@@ -10,6 +10,8 @@ export interface Session { id: string; csrf: string }
 
 export class AdminAuth {
   private readonly attempts = new Map<string, { count: number; resetAt: number }>();
+  /** Password checks under way (each a deliberately slow argon2id, then the wait after a wrong password). */
+  private checking = 0;
   constructor(private readonly db: DB, private readonly secureCookies: boolean) {}
 
   isSetUp() { return Boolean(this.db.query('SELECT 1 FROM admin WHERE id = 1').get()); }
@@ -34,7 +36,12 @@ export class AdminAuth {
   async verify(password: string, ip: string) {
     const row = this.db.query<{ password_hash: string }, []>('SELECT password_hash FROM admin WHERE id = 1').get();
     if (!row) throw new AppError(409, 'setup_required', '请先创建管理员密码');
-    if (!await Bun.password.verify(password, row.password_hash)) { await this.fail(ip); throw new AppError(401, 'wrong_password', '密码错误'); }
+    // At most two at once: guesses sent in parallel would get round the wait after each failure (and load the CPU).
+    if (this.checking >= 2) throw new AppError(429, 'too_many_logins', '登录请求太多，请稍后再试');
+    this.checking++;
+    try {
+      if (!await Bun.password.verify(password, row.password_hash)) { await this.fail(ip); throw new AppError(401, 'wrong_password', '密码错误'); }
+    } finally { this.checking--; }
     this.attempts.delete(ip);
   }
 
