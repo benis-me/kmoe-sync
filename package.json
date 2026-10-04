@@ -1,6 +1,6 @@
 {
   "name": "kmoesync",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "自托管的 Kmoe 漫画订阅与同步服务：追更、按卷下载，存到 NAS 本地目录或 WebDAV 书库。",

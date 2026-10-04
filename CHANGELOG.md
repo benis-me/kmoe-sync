@@ -2,6 +2,16 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.1] - 2026-10-04
+
+### 新增
+
+- 宽屏模式：侧栏顶部、深浅色切换旁边的按钮，让页面铺满侧栏右边的全部宽度；和深浅色一样记在这个浏览器里。
+
+### 变更
+
+- 桌面上各页同宽（最宽 1280px），在侧栏右边居中，两侧留白一致；以前靠左对齐，大屏幕右边空出一大块。
+
 ## [0.2.0] - 2026-10-02
 
 升级时会先在数据目录留一份数据库副本 `kmoesync.db.v4.bak`（只有属主可读）。要退回 0.1.4，需要先用它替换 `kmoesync.db`；旧镜像会拒绝打开新版本的数据库，不会把它用坏。
@@ -112,6 +122,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.2.1]: https://github.com/benis-me/kmoe-sync/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/benis-me/kmoe-sync/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/benis-me/kmoe-sync/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/benis-me/kmoe-sync/compare/v0.1.2...v0.1.3
