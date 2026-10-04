@@ -1,10 +1,11 @@
-// Desktop sidebar (name and the light/dark switch, five destinations, the download queue and the Kmoe account) and the phone top bar + tab bar.
+// Desktop sidebar (name, the 宽屏 and light/dark switches, five destinations, the download queue and the Kmoe account) and the phone top bar + tab bar.
 import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { Compass, Download, FolderSync, Library, Moon, Settings, Sun, WifiOff } from 'lucide-react';
+import { ChevronsLeftRight, ChevronsRightLeft, Compass, Download, FolderSync, Library, Moon, Settings, Sun, WifiOff } from 'lucide-react';
 import { cn } from 'cn';
 import { statusQuery } from '@/lib/queries';
 import { useTheme } from '@/lib/theme';
+import { useLayout } from '@/stores/layout';
 import { Button } from '@/components/ui/button';
 import { Indicator } from '@/components/ui/indicator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +33,15 @@ function ThemeToggle() {
   </Button>;
 }
 
+function WideToggle() {
+  const wide = useLayout(state => state.wide);
+  const toggle = useLayout(state => state.toggleWide);
+  const label = wide ? '退出宽屏模式' : '切换到宽屏模式';
+  return <Button variant="ghost" size="icon-sm" className="-my-1.5 text-muted-foreground" aria-label={label} title={label} onClick={toggle}>
+    {wide ? <ChevronsRightLeft /> : <ChevronsLeftRight />}
+  </Button>;
+}
+
 export function Sidebar({ connected }: { connected: boolean }) {
   return <div className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r bg-sidebar md:flex">
     <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 tone tone-fade-b" />
@@ -39,7 +49,7 @@ export function Sidebar({ connected }: { connected: boolean }) {
       <span className="flex items-center gap-2.5 text-[15px] leading-tight font-semibold tracking-tight">
         <img src="/icon.svg" alt="" className="size-6 rounded-[6px] dark:ring-1 dark:ring-white/12" />Kmoe Sync
       </span>
-      <ThemeToggle />
+      <div className="flex"><WideToggle /><ThemeToggle /></div>
     </div>
     <nav aria-label="主导航" className="relative flex flex-col gap-0.5 px-3">
       <Link to="/" activeOptions={EXACT} className={sideItem}><Library className="size-4 shrink-0" />书架</Link>

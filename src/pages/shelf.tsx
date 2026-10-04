@@ -56,7 +56,7 @@ export function ShelfPage() {
 
   const todo = library?.todo ?? 0;
   const prominent = entries?.length === 0 || todo > 0 || !!library?.unscanned;
-  return <Page width="wide">
+  return <Page>
     <PageHeader title="书架" description={entries?.length
       ? <>{entries.length} 部漫画 · 追更中 {subscribed} 部{desktop && status && !!subscribed && <NextCheck status={status} />}</>
       : '订阅或下载过的漫画都在这里。'}>

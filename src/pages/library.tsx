@@ -39,7 +39,7 @@ export function LibraryPage() {
   const list = targets.data ?? [];
   const target = list.find(t => t.id === targetId) ?? list.find(t => t.id === defaultId) ?? list.find(t => t.isDefault) ?? list[0];
 
-  return <Page width="wide">
+  return <Page>
     <PageHeader title="书库整理">
       {list.length > 1 && target && <Select value={String(target.id)} onValueChange={value => void navigate({ search: { targetId: Number(value) }, replace: true })}>
         <SelectTrigger size="sm" aria-label="存储位置" className="min-w-44 max-md:max-w-44 max-md:min-w-0 *:data-[slot=select-value]:flex-1 max-md:[&_[data-slot=select-value]_span]:hidden"><HardDrive className="text-muted-foreground" /><SelectValue /></SelectTrigger>

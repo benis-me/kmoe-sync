@@ -2,17 +2,19 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from 'cn';
 import { useMediaQuery } from '@/lib/hooks';
+import { useLayout } from '@/stores/layout';
 
 /** Where a page's header actions go on phones: the top bar, at the end of the row with the page's name (set by the shell). */
 export const TopBarActions = createContext<HTMLElement | null>(null);
 
 /** Page column. On phones the top bar already names the page, so the heading block is for screen readers only. */
-// The bottom padding keeps the end of a page clear of the floating AI 助手 button. Every page starts at the same left
-// edge (not centred), so switching pages never shifts the content sideways; narrower pages leave room on the right.
-export function Page({ children, className, width = 'default' }: { children: ReactNode; className?: string; width?: 'default' | 'wide' }) {
+// The bottom padding keeps the end of a page clear of the floating AI 助手 button. Every page has the same width,
+// centred beside the sidebar (or all of it in 宽屏模式), so switching pages never shifts the content sideways.
+export function Page({ children, className }: { children: ReactNode; className?: string }) {
+  const wide = useLayout(state => state.wide);
   return <div className={cn(
-    'flex w-full flex-col gap-6 px-4 pt-4 pb-16 md:gap-8 md:px-8 md:pt-9 md:pb-20 lg:px-10',
-    width === 'wide' ? 'max-w-7xl' : 'max-w-6xl',
+    'mx-auto flex w-full flex-col gap-6 px-4 pt-4 pb-16 md:gap-8 md:px-8 md:pt-9 md:pb-20 lg:px-10',
+    !wide && 'max-w-7xl',
     className,
   )}>{children}</div>;
 }
