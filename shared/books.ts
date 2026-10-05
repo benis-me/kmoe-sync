@@ -54,16 +54,24 @@ export function bookNumber(name: string, title?: string | null): BookNumber {
   return kind('unknown');
 }
 
-/** Chapter numbers a name states: 話 076-080, 第76-80話, 076話, Ch.12 (a pack of chapters is a range). */
-const CHAPTERS = [String.raw`[話话]\s*R`, String.raw`第\s*R\s*[話话回]`, String.raw`R\s*[話话回]`, String.raw`(?:^|[^a-z])ch(?:ap(?:ter)?)?\.?\s*R`]
-  .map(pattern => new RegExp(pattern.replace('R', String.raw`(\d+(?:\.\d+)?)(?:\s*[-~～－–—]\s*(\d+(?:\.\d+)?))?`), 'i'));
+const RANGE = String.raw`(\d+(?:\.\d+)?)(?:\s*[-~～－–—]\s*(\d+(?:\.\d+)?))?`;
+/** Where a 話 / 回 marker's number is, most telling first: 第105话, 話076-080, 話 076-080, 076話, 076 話. */
+const BEFORE_MARK = new RegExp(String.raw`第\s*${RANGE}\s*$`), AFTER_MARK = new RegExp(String.raw`^${RANGE}`), AFTER_SPACE = new RegExp(String.raw`^\s+${RANGE}`);
+const NUMBER_BEFORE = new RegExp(String.raw`(?:^|[^\d.])${RANGE}$`), NUMBER_SPACE = new RegExp(String.raw`(?:^|[^\d.])${RANGE}\s+$`);
+const CHAPTER_EN = new RegExp(String.raw`(?:^|[^a-z])ch(?:ap(?:ter)?)?\.?\s*${RANGE}`, 'i');
+/**
+ * The chapters a name states (a pack is a range): the first 話 / 回 with a number by it, else "Ch.12". So "第105话 5x6" is
+ * 105, "話 035-037 [話132-134]" (a Kmoe item) is 35-37, and "鏈鋸人2 話076-080" is 76-80.
+ */
 export function chapterRange(name: string): { first: number; last: number } | null {
   const text = name.normalize('NFKC');
-  for (const pattern of CHAPTERS) {
-    const match = pattern.exec(text);
-    if (match) return { first: Number(match[1]), last: Number(match[2] ?? match[1]) };
+  for (const marker of text.matchAll(/[話话回]/g)) {
+    const before = text.slice(0, marker.index), after = text.slice(marker.index + 1);
+    const found = BEFORE_MARK.exec(before) ?? AFTER_MARK.exec(after) ?? AFTER_SPACE.exec(after) ?? NUMBER_BEFORE.exec(before) ?? NUMBER_SPACE.exec(before);
+    if (found) return { first: Number(found[1]), last: Number(found[2] ?? found[1]) };
   }
-  return null;
+  const found = CHAPTER_EN.exec(text);
+  return found ? { first: Number(found[1]), last: Number(found[2] ?? found[1]) } : null;
 }
 
 /** What a Kmoe item is: 卷 NN volumes (else their order), 話 chapter packs, 番外 extras. */

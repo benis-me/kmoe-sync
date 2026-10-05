@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { planRename, type RenameInput, type RenameItem } from '@shared/books';
+import { chapterRange, planRename, type RenameInput, type RenameItem } from '@shared/books';
 import type { LibraryCheck, LibraryJob, RenamePreview, Task } from '@shared/model';
 import { createApp } from '../server/app';
 import { FAKE_PASSWORD, startFakeKmoe } from './fake-kmoe';
@@ -51,6 +51,14 @@ describe('planRename', () => {
 
   test('chapter packs in any notation, and volumes or packs Kmoe no longer lists, named the way Kmoe names them', () => {
     expect(renames(plan(['第5-15話.epub', 'Ch.005~015.mobi']))).toEqual({ '第5-15話.epub': '渣女沒渣報 - 話 005-015.epub', 'Ch.005~015.mobi': '渣女沒渣報 - 話 005-015.mobi' });
+    // The chapter is the number by 第…话, not one in the subtitle after it.
+    expect(chapterRange('第105话 5x6')).toEqual({ first: 105, last: 105 });
+    expect(chapterRange('鏈鋸人2 話076-080')).toEqual({ first: 76, last: 80 });
+    expect(chapterRange('話 076-080')).toEqual({ first: 76, last: 80 });
+    expect(chapterRange('076話')).toEqual({ first: 76, last: 76 });
+    expect(chapterRange('話 035-037 [話132-134]')).toEqual({ first: 35, last: 37 });
+    expect(chapterRange('最終回紀念+番外特別')).toBeNull();
+    expect(chapterRange('Ch.12')).toEqual({ first: 12, last: 12 });
     // 庫洛魔法使 透明牌篇 on Kmoe has volumes only now; the files were named after the title without its space.
     const clear = planRename({
       title: '庫洛魔法使 透明牌篇', hint: '庫洛魔法使透明牌篇', authors: [], rule: '{title}-{bookname}', items: [1, 2, 16].map(volume),
