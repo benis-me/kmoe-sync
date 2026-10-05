@@ -2,6 +2,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.2] - 2026-10-06
+
+### 修复
+
+- 整理文件名把「第105话 5x6」认成第 5 话（副标题里的数字）：现在以第一个「话」旁边的数字为准，「第N话」优先，Kmoe 的「話 035-037 [話132-134]」仍是 35–37 话。
+
 ## [0.3.1] - 2026-10-06
 
 ### 变更
@@ -139,6 +145,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.3.2]: https://github.com/benis-me/kmoe-sync/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/benis-me/kmoe-sync/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/benis-me/kmoe-sync/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/benis-me/kmoe-sync/compare/v0.2.0...v0.2.1
