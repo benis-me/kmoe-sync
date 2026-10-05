@@ -2,6 +2,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.1] - 2026-10-06
+
+### 变更
+
+- 整理文件名认得出「话」：`話076-080`、`第76-80話`、`Ch.076-080` 等写法都按话数对应 Kmoe 上的话。
+- Kmoe 上已经不再列出的卷或话（例如出了单行本后撤下的连载话），只要文件名写明了卷数或话数，就按 Kmoe 的写法命名（「話 076-080」「卷 17」），预览里会注明。只有一个数字、没写卷或话的仍然不改。
+- 整理文件名的动态里写明是否已请求 Komga 扫描书库，请求失败时写出原因。
+- API 令牌可以调用整理文件名的预览和改名（`/api/v1/library/rename/preview`、`/api/v1/library/rename`）。
+
 ## [0.3.0] - 2026-10-05
 
 ### 新增
@@ -130,6 +139,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.3.1]: https://github.com/benis-me/kmoe-sync/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/benis-me/kmoe-sync/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/benis-me/kmoe-sync/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/benis-me/kmoe-sync/compare/v0.1.4...v0.2.0

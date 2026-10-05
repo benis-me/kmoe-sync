@@ -12,7 +12,7 @@ body:
     attributes:
       label: 版本
       description: 「设置 → 关于」里的版本号
-      placeholder: v0.3.0
+      placeholder: v0.3.1
     validations:
       required: true
   - type: dropdown
