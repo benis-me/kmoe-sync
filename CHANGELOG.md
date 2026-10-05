@@ -2,6 +2,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.3] - 2026-10-06
+
+### 变更
+
+- API 令牌也可以调用整理文件名的「AI 识别」（`/api/v1/library/rename/ai`），用设置里的 AI 和它的额度。
+
 ## [0.3.2] - 2026-10-06
 
 ### 修复
@@ -145,6 +151,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.3.3]: https://github.com/benis-me/kmoe-sync/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/benis-me/kmoe-sync/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/benis-me/kmoe-sync/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/benis-me/kmoe-sync/compare/v0.2.1...v0.3.0
