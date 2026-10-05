@@ -29,6 +29,7 @@ const FileRow = ({ file, checked, onChange }: { file: RenameFile; checked: boole
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-xs text-muted-foreground line-through decoration-muted-foreground/40" title={file.name}>{file.name}</span>
         <span className="truncate text-[13px]" title={file.to}>{file.to}</span>
+        {file.note && <span className="text-xs text-muted-foreground">{file.note}</span>}
       </span>
       {file.source === 'ai' && <Badge variant="muted" className="mt-0.5 shrink-0 tabular-nums" title="AI 识别的，请核对">AI {percentOf(file.confidence ?? 0)}</Badge>}
     </label>

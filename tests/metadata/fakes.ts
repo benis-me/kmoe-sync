@@ -55,7 +55,7 @@ export function startFakeKomga(options: { apiKey?: string; roles?: string[] } = 
   const apiKey = options.apiKey ?? 'komga-key';
   const state = {
     roles: options.roles ?? ['ADMIN', 'USER'],
-    libraries: [{ id: 'lib1', name: '漫画', root: '/data' }, { id: 'lib2', name: '小说', root: '/novels' }],
+    libraries: [{ id: 'lib1', name: '漫画', root: '/data', hashFiles: true }, { id: 'lib2', name: '小说', root: '/novels', hashFiles: false }],
     series: [] as FakeSeries[],
     books: [] as FakeBook[],
     thumbnails: new Map<string, { id: string; type: string; selected: boolean }[]>(),
@@ -84,7 +84,12 @@ export function startFakeKomga(options: { apiKey?: string; roles?: string[] } = 
         const seriesId = body.condition.allOf.find(entry => entry.seriesId)?.seriesId?.value;
         return Response.json({ content: state.books.filter(book => book.seriesId === seriesId) });
       }
-      let match = /^\/api\/v1\/libraries\/([^/]+)\/scan$/.exec(path);
+      let match = /^\/api\/v1\/libraries\/([^/]+)$/.exec(path);
+      if (match && req.method === 'GET') {
+        const library = state.libraries.find(entry => entry.id === match![1]);
+        return library ? Response.json({ ...library, scanInterval: 'DISABLED' }) : new Response('Not found', { status: 404 });
+      }
+      match = /^\/api\/v1\/libraries\/([^/]+)\/scan$/.exec(path);
       if (match && req.method === 'POST') { state.scans.push(match[1]!); return new Response(null, { status: 202 }); }
       match = /^\/api\/v1\/series\/([^/]+)$/.exec(path);
       if (match && req.method === 'GET') {

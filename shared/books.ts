@@ -54,6 +54,18 @@ export function bookNumber(name: string, title?: string | null): BookNumber {
   return kind('unknown');
 }
 
+/** Chapter numbers a name states: 話 076-080, 第76-80話, 076話, Ch.12 (a pack of chapters is a range). */
+const CHAPTERS = [String.raw`[話话]\s*R`, String.raw`第\s*R\s*[話话回]`, String.raw`R\s*[話话回]`, String.raw`(?:^|[^a-z])ch(?:ap(?:ter)?)?\.?\s*R`]
+  .map(pattern => new RegExp(pattern.replace('R', String.raw`(\d+(?:\.\d+)?)(?:\s*[-~～－–—]\s*(\d+(?:\.\d+)?))?`), 'i'));
+export function chapterRange(name: string): { first: number; last: number } | null {
+  const text = name.normalize('NFKC');
+  for (const pattern of CHAPTERS) {
+    const match = pattern.exec(text);
+    if (match) return { first: Number(match[1]), last: Number(match[2] ?? match[1]) };
+  }
+  return null;
+}
+
 /** What a Kmoe item is: 卷 NN volumes (else their order), 話 chapter packs, 番外 extras. */
 export function itemNumber(item: { type: ContentType; name: string; sort_order: number | null }): BookNumber {
   if (item.type !== 'volume') return { kind: item.type === 'serial' ? 'chapter' : 'extra', number: null, label: null, range: false };
@@ -95,35 +107,61 @@ type Planned = RenameFile & { named: boolean };
 
 /**
  * What renaming a series folder's book files to the rule would do. A file is recognised by its download record, else by its
- * name (an item name like "話 005-015" after the title, or a volume number in any notation), else by the AI's reading.
+ * name (an item name like "話 005-015" after the title, a volume number or chapter range in any notation, or a volume or
+ * chapter pack Kmoe no longer lists), else by the AI's reading.
  * Files already named as the rule says count in `named`; the rest come back with their new name, or with `to` null and why:
  * not recognised, two files of one item, the name taken by another entry, or names that would have to be swapped.
  */
 export function planRename(input: RenameInput): { named: number; files: RenameFile[] } {
   const items = new Map(input.items.map(item => [item.id, item]));
-  const byKey = new Map<string, RenameItem[]>(), byVolume = new Map<number, RenameItem[]>();
+  const byKey = new Map<string, RenameItem[]>(), byVolume = new Map<number, RenameItem[]>(), byChapters = new Map<string, RenameItem[]>();
+  const add = <K>(map: Map<K, RenameItem[]>, key: K, item: RenameItem) => map.set(key, [...map.get(key) ?? [], item]);
   for (const item of input.items) {
-    const key = chapterKey(item.name);
-    byKey.set(key, [...byKey.get(key) ?? [], item]);
-    const number = itemNumber(item);
-    if (number.kind === 'volume' && number.number !== null && !number.range) byVolume.set(number.number, [...byVolume.get(number.number) ?? [], item]);
+    add(byKey, chapterKey(item.name), item);
+    const number = itemNumber(item), chapters = item.type === 'serial' ? chapterRange(item.name) : null;
+    if (number.kind === 'volume' && number.number !== null && !number.range) add(byVolume, number.number, item);
+    if (chapters) add(byChapters, `${chapters.first}-${chapters.last}`, item);
   }
   const titles = [input.title, input.hint ?? ''].map(title => nfc(title).trim()).filter(Boolean);
 
+  /** A file name (without extension) after Kmoe's brand and the title: "[Kmoe][鏈鋸人]卷01" → "卷01". */
+  function afterTitle(stem: string): string {
+    const rest = nfc(stem).trim().replace(BRANDED, '');
+    const title = titles.flatMap(title => [title, safeSegment(title)]).find(title => rest.startsWith(title));
+    return title ? rest.slice(title.length) : rest;
+  }
+
   /** The item a file name (without extension) names; 'ambiguous' when it fits several. */
   function recognise(stem: string): RenameItem | 'ambiguous' | null {
-    let rest = nfc(stem).trim().replace(BRANDED, '');
-    const title = titles.flatMap(title => [title, safeSegment(title)]).find(title => rest.startsWith(title));
-    if (title) rest = rest.slice(title.length);
+    const rest = afterTitle(stem);
     // The whole rest, then what follows each separator: "鏈鋸人 - 話 005-015", "Chainsaw Man 卷 01".
     const tails = [rest, ...[...rest.matchAll(/[\s\-_·.]+/g)].map(match => rest.slice(match.index + match[0].length))];
     for (const tail of tails) {
       const hits = byKey.get(chapterKey(tail.replace(/^[\s\-_·.]+/, '')));
       if (hits) return hits.length === 1 ? hits[0]! : 'ambiguous';
     }
-    const number = bookNumber(rest);
-    const hits = number.kind === 'volume' && !number.range && number.number !== null ? byVolume.get(number.number) : undefined;
+    const number = bookNumber(rest), chapters = number.kind === 'chapter' ? chapterRange(rest) : null;
+    const hits = number.kind === 'volume' && !number.range && number.number !== null ? byVolume.get(number.number)
+      : chapters ? byChapters.get(`${chapters.first}-${chapters.last}`) : undefined;
     return hits ? hits.length === 1 ? hits[0]! : 'ambiguous' : null;
+  }
+
+  /**
+   * A volume or chapter pack the name states plainly but Kmoe no longer lists (chapters gathered into a volume, a volume
+   * not listed yet), named the way Kmoe names its items: "話 076-080", "卷 17".
+   */
+  function stated(stem: string): RenameItem | null {
+    const rest = afterTitle(stem), number = bookNumber(rest), pad = (value: number, width: number) => String(value).replace(/^\d+/, digits => digits.padStart(width, '0'));
+    if (number.kind === 'chapter') {
+      const chapters = chapterRange(rest);
+      if (!chapters) return null;
+      const name = `話 ${pad(chapters.first, 3)}${chapters.last > chapters.first ? `-${pad(chapters.last, 3)}` : ''}`;
+      return { id: `~${name}`, type: 'serial', name, sort_order: chapters.first };
+    }
+    // Only an explicit volume marker: a bare trailing number is too weak a hint to name a file after.
+    if (number.kind !== 'volume' || number.range || number.number === null || !STRONG.some(pattern => pattern.test(rest.normalize('NFKC')))) return null;
+    const name = `卷 ${pad(number.number, 2)}`;
+    return { id: `~${name}`, type: 'volume', name, sort_order: number.number };
   }
 
   /** Named as the rule says: {filename} is Kmoe's name for the file ("[Kmoe][鏈鋸人]卷01", any mirror or title), dates any date. */
@@ -133,7 +171,10 @@ export function planRename(input: RenameInput): { named: number; files: RenameFi
       .replaceAll(`${MARK}filename`, '(.+)');
     for (const key of DATES) pattern = pattern.replaceAll(`${MARK}${key}`, key === 'year' ? '\\d{4}' : '\\d{2}');
     const match = new RegExp(`^${pattern}$`, 'u').exec(nfc(name));
-    return !!match && (match[1] === undefined || (BRANDED.test(match[1]) && recognise(match[1]) === item));
+    if (!match) return false;
+    if (match[1] === undefined) return true;
+    const found = BRANDED.test(match[1]) ? recognise(match[1]) : 'ambiguous';
+    return found === item || (found === null && stated(match[1])?.name === item.name);
   }
 
   const plans: Planned[] = [];
@@ -142,16 +183,20 @@ export function planRename(input: RenameInput): { named: number; files: RenameFi
     let item = recorded === undefined ? undefined : items.get(recorded);
     let source: RenameFile['source'] = item ? 'record' : null, note: string | null = null;
     if (!item) {
-      const found = recognise(name.replace(/\.[^.]+$/, ''));
+      const stem = name.replace(/\.[^.]+$/, ''), found = recognise(stem);
       if (found === 'ambiguous') note = '文件名对应多个章节';
       else if (found) { item = found; source = 'name'; }
+      else if ((item = stated(stem) ?? undefined)) {
+        source = 'name';
+        note = `Kmoe 上已经没有「${item.name}」这一项，按文件名命名`;
+      }
     }
     if (!item && reading && items.has(reading.item)) { item = items.get(reading.item); source = 'ai'; }
     const confidence = source === 'ai' ? reading!.confidence : null;
-    if (!item) { plans.push({ name, to: null, item: null, source: null, confidence: null, note: note ?? '认不出是哪一卷', named: false }); continue; }
+    if (!item) { plans.push({ name, to: null, item: null, source: null, confidence: null, note: note ?? '认不出是哪一卷或哪一话', named: false }); continue; }
     const to = renderRule(input.rule, { title: input.title, author: input.authors, filename: kmoeFilename(input.title, item.name), bookname: item.name, ext: extOf(name), date: input.date });
     const named = nfc(to) === nfc(name) || follows(name, item);
-    plans.push({ name, to: named ? name : to, item: item.name, source, confidence, note: null, named });
+    plans.push({ name, to: named ? name : to, item: item.name, source, confidence, note, named });
   }
 
   const groups = (key: (plan: Planned) => string | null) => {

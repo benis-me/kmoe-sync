@@ -422,12 +422,21 @@ export class MetadataService {
     return { name: library.name, hashFiles: library.hashFiles === true };
   }
 
-  /** Files on a target were renamed: Komga shows the new names after it scans the library. */
-  async rescan(targetId: number): Promise<void> {
+  /**
+   * Files on a target were renamed: Komga shows the new names after it scans the library. Null when no Komga library reads
+   * the target; else why the scan could not be asked for (null error: asked).
+   */
+  async rescan(targetId: number): Promise<{ error: string | null } | null> {
     const stored = this.stored(), libraryId = this.libraryOf(targetId, stored), run = stored.enabled ? this.newRun() : null;
-    if (!libraryId || !run) return;
+    if (!libraryId || !run) return null;
     this.scans.set(libraryId, Date.now());
-    await run.komga.scan(libraryId).catch(error => console.warn(`[metadata] Komga scan ${libraryId}: ${errorMessage(error)}`));
+    try {
+      await run.komga.scan(libraryId);
+      return { error: null };
+    } catch (error) {
+      console.warn(`[metadata] Komga scan ${libraryId}: ${errorMessage(error)}`);
+      return { error: errorMessage(error) };
+    }
   }
 
   // ---------- Matching ----------

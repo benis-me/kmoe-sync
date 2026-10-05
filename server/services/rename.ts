@@ -144,12 +144,13 @@ export class RenameService {
           }
         }
       } finally {
-        // Also when cancelled: what was renamed is reported and goes to Komga.
+        // Also when cancelled: what was renamed is reported, and Komga scans for the new names.
         if (renamed) {
-          await this.deps.metadata.rescan(targetId);
+          const scan = await this.deps.metadata.rescan(targetId);
+          const notes = [scan && (scan.error ? `没能请求 Komga 扫描书库（${scan.error}），请在 Komga 里手动扫描` : '已请求 Komga 扫描书库'), ...failed.slice(0, 5)];
           this.deps.activity.add({
-            kind: 'info', level: failed.length ? 'warning' : 'success', title: `整理文件名：改名了 ${folders} 部的 ${renamed} 个文件${failed.length ? `，${failed.length} 个没有改` : ''}`,
-            detail: failed.length ? failed.slice(0, 5).join('；') : null,
+            kind: 'info', level: failed.length || scan?.error ? 'warning' : 'success', title: `整理文件名：改名了 ${folders} 部的 ${renamed} 个文件${failed.length ? `，${failed.length} 个没有改` : ''}`,
+            detail: notes.filter(Boolean).join('；') || null,
           });
         }
       }

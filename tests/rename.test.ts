@@ -8,6 +8,7 @@ import { planRename, type RenameInput, type RenameItem } from '@shared/books';
 import type { LibraryCheck, LibraryJob, RenamePreview, Task } from '@shared/model';
 import { createApp } from '../server/app';
 import { FAKE_PASSWORD, startFakeKmoe } from './fake-kmoe';
+import { startFakeKomga } from './metadata/fakes';
 
 const volume = (n: number): RenameItem => ({ id: String(1000 + n), type: 'volume', name: `卷 ${String(n).padStart(2, '0')}`, sort_order: n });
 const ITEMS: RenameItem[] = [
@@ -34,7 +35,7 @@ describe('planRename', () => {
       'Vol.04.epub': '渣女沒渣報 - 卷 04.epub',
       '[Kmoe][渣女沒渣報]話005-015.epub': '渣女沒渣報 - 話 005-015.epub',
       '番外冒險者指南.mobi': '渣女沒渣報 - 番外 冒險者指南.mobi',
-      'scan_0012.epub': '认不出是哪一卷',
+      'scan_0012.epub': '认不出是哪一卷或哪一话',
     });
     expect(result.files.find(file => file.name === 'Vol.04.epub')).toMatchObject({ item: '卷 04', source: 'name', confidence: null });
   });
@@ -46,6 +47,29 @@ describe('planRename', () => {
     });
     expect(renames(result)).toEqual({ '第一本.epub': '渣女沒渣報 - 卷 01.epub', 'scan_0012.epub': '渣女沒渣報 - 卷 05.epub', '渣女沒渣報 - 卷 01.mobi': '渣女沒渣報 - 卷 02.mobi' });
     expect(result.files.find(file => file.name === 'scan_0012.epub')).toMatchObject({ source: 'ai', confidence: 0.92, item: '卷 05' });
+  });
+
+  test('chapter packs in any notation, and volumes or packs Kmoe no longer lists, named the way Kmoe names them', () => {
+    expect(renames(plan(['第5-15話.epub', 'Ch.005~015.mobi']))).toEqual({ '第5-15話.epub': '渣女沒渣報 - 話 005-015.epub', 'Ch.005~015.mobi': '渣女沒渣報 - 話 005-015.mobi' });
+    // 庫洛魔法使 透明牌篇 on Kmoe has volumes only now; the files were named after the title without its space.
+    const clear = planRename({
+      title: '庫洛魔法使 透明牌篇', hint: '庫洛魔法使透明牌篇', authors: [], rule: '{title}-{bookname}', items: [1, 2, 16].map(volume),
+      entries: ['庫洛魔法使透明牌篇-卷 16.epub', '庫洛魔法使透明牌篇-話076-080.epub', '庫洛魔法使透明牌篇-話081.epub', '庫洛魔法使透明牌篇-卷 17.epub', '庫洛魔法使透明牌篇 18.epub']
+        .map(name => ({ name, directory: false })),
+    });
+    expect(renames(clear)).toEqual({
+      '庫洛魔法使透明牌篇-卷 16.epub': '庫洛魔法使 透明牌篇-卷 16.epub',
+      '庫洛魔法使透明牌篇-話076-080.epub': '庫洛魔法使 透明牌篇-話 076-080.epub',
+      '庫洛魔法使透明牌篇-話081.epub': '庫洛魔法使 透明牌篇-話 081.epub',
+      '庫洛魔法使透明牌篇-卷 17.epub': '庫洛魔法使 透明牌篇-卷 17.epub',
+      // A bare number is too weak to name a file after when Kmoe has no such volume.
+      '庫洛魔法使透明牌篇 18.epub': '认不出是哪一卷或哪一话',
+    });
+    expect(clear.files.find(file => file.name === '庫洛魔法使透明牌篇-話076-080.epub')).toMatchObject({ item: '話 076-080', source: 'name', note: 'Kmoe 上已经没有「話 076-080」这一项，按文件名命名' });
+    expect(clear.files.find(file => file.name === '庫洛魔法使透明牌篇-卷 16.epub')).toMatchObject({ item: '卷 16', note: null });
+    // Already named by the rule, or by Kmoe's own name with a {filename} rule.
+    expect(planRename({ title: 'X', authors: [], rule: '{title}-{bookname}', items: [], entries: [{ name: 'X-話 076-080.epub', directory: false }] })).toEqual({ named: 1, files: [] });
+    expect(planRename({ title: 'X', authors: [], rule: '{filename}', items: [], entries: [{ name: '[Mox.moe][X]話 076-080.epub', directory: false }] })).toEqual({ named: 1, files: [] });
   });
 
   test('the title the files were named after, digits in titles, and a change of case only', () => {
@@ -94,7 +118,7 @@ describe('planRename', () => {
 });
 
 describe('整理文件名 through the API', () => {
-  const fake = startFakeKmoe({ port: 0 });
+  const fake = startFakeKmoe({ port: 0 }), komga = startFakeKomga();
   const root = mkdtempSync(join(tmpdir(), 'kmoesync-rename-'));
   const library = join(root, 'library'), folder = join(library, '渣女沒渣報');
   const app = createApp({
@@ -130,7 +154,7 @@ describe('整理文件名 through the API', () => {
     mkdirSync(folder, { recursive: true });
     for (const name of ['渣女沒渣報-卷 02.epub', '話005-015.mobi', 'notes.epub', 'cover.jpg']) writeFileSync(join(folder, name), 'PK\x03\x04 book');
   });
-  afterAll(async () => { await app.stop(); fake.stop(); rmSync(root, { recursive: true, force: true }); });
+  afterAll(async () => { await app.stop(); fake.stop(); komga.stop(); rmSync(root, { recursive: true, force: true }); });
 
   test('a download named by the old rule and older files get the new rule; records, checks and folders follow', async () => {
     expect((await api('PUT', '/api/comics/8a3dbd/folder', { targetId, path: '/渣女沒渣報' })).status).toBe(200);
@@ -139,13 +163,16 @@ describe('整理文件名 through the API', () => {
     expect(existsSync(join(folder, '[Kmoe][渣女沒渣報]卷01.epub'))).toBe(true);
     expect((await api('PATCH', `/api/targets/${targetId}`, { rule: '{title}/{title} - {bookname}' })).status).toBe(200);
 
+    // Komga reads this library: the preview says whether it keeps read progress through renames, and the job asks it to scan.
+    expect((await api('PATCH', '/api/metadata/settings', { enabled: true, komga: { url: komga.url, auth: 'apiKey', secret: komga.apiKey, libraries: [{ targetId, libraryId: 'lib1' }] } })).status).toBe(200);
+
     const preview = (await api<RenamePreview>('POST', '/api/library/rename/preview', { targetId })).data;
-    expect(preview).toMatchObject({ rule: '{title} - {bookname}', named: 0, komga: null });
+    expect(preview).toMatchObject({ rule: '{title} - {bookname}', named: 0, komga: { name: '漫画', hashFiles: true } });
     expect(preview.folders.map(f => [f.path, f.files.map(file => [file.name, file.to ?? file.note, file.source])])).toEqual([['/渣女沒渣報', [
       ['[Kmoe][渣女沒渣報]卷01.epub', '渣女沒渣報 - 卷 01.epub', 'record'],
       ['話005-015.mobi', '渣女沒渣報 - 話 005-015.mobi', 'name'],
       ['渣女沒渣報-卷 02.epub', '渣女沒渣報 - 卷 02.epub', 'name'],
-      ['notes.epub', '认不出是哪一卷', null],
+      ['notes.epub', '认不出是哪一卷或哪一话', null],
     ]]]);
     // Only plain file names that are books, in a folder of this target.
     const folderId = preview.folders[0]!.folderId;
@@ -163,7 +190,8 @@ describe('整理文件名 through the API', () => {
     expect(check.chapters.filter(chapter => chapter.status === 'downloaded').map(chapter => chapter.id)).toEqual(['1001', '1002']);
     const overview = (await api('GET', `/api/library?targetId=${targetId}`)).data;
     expect(overview.folders.find((f: { path: string }) => f.path === '/渣女沒渣報')).toMatchObject({ books: 4, sample: '渣女沒渣報 - 話 005-015.mobi', hint: '渣女沒渣報' });
-    expect((await api('GET', '/api/activity?limit=1')).data[0]).toMatchObject({ level: 'success', title: '整理文件名：改名了 1 部的 3 个文件' });
+    expect(komga.state.scans).toEqual(['lib1']);
+    expect((await api('GET', '/api/activity?limit=1')).data[0]).toMatchObject({ level: 'success', title: '整理文件名：改名了 1 部的 3 个文件', detail: '已请求 Komga 扫描书库' });
 
     const again = (await api<RenamePreview>('POST', '/api/library/rename/preview', { targetId })).data;
     expect(again.named).toBe(3);
@@ -174,5 +202,10 @@ describe('整理文件名 through the API', () => {
     const failed = await until(job, current => !current.running);
     expect(failed.error).toContain('notes.epub');
     expect(readdirSync(folder)).toContain('notes.epub');
+    // The API token reaches 整理文件名 too (/api/v1), like the other library jobs.
+    const token = (await api<{ token: string }>('POST', '/api/token')).data.token;
+    const viaToken = await fetch(`${base}/api/v1/library/rename/preview`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ targetId }) });
+    expect(viaToken.status).toBe(200);
+    expect((await viaToken.json() as RenamePreview).named).toBe(4);
   }, 60_000);
 });
