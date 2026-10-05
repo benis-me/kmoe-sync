@@ -215,5 +215,8 @@ describe('整理文件名 through the API', () => {
     const viaToken = await fetch(`${base}/api/v1/library/rename/preview`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ targetId }) });
     expect(viaToken.status).toBe(200);
     expect((await viaToken.json() as RenamePreview).named).toBe(4);
+    // The AI pass too: reached with the token, refused only because no AI is set up here.
+    const aiViaToken = await fetch(`${base}/api/v1/library/rename/ai`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId }) });
+    expect(aiViaToken.status).toBe(409);
   }, 60_000);
 });

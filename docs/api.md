@@ -37,6 +37,7 @@ Authorization: Bearer kms_xxxxxxxx
 | POST | `/api/v1/library/match-kmoe` · `/match-bangumi` · `/sync-komga` | 匹配 Kmoe / 匹配 Bangumi / 同步 Komga（后台任务） |
 | POST | `/api/v1/library/folders/:id/sync` | 立即把一个文件夹的元数据写入 Komga |
 | POST | `/api/v1/library/rename/preview` `{"targetId", "folderIds"?}` | 整理文件名：已关联文件夹里每个文件按命名规则的新名字（只读） |
+| POST | `/api/v1/library/rename/ai` `{"folderId"}` | 用设置里的 AI 识别一个文件夹里认不出的文件，返回带 AI 结果的预览（用 AI 额度） |
 | POST | `/api/v1/library/rename` `{"targetId", "renames": [{"folderId", "name", "to"}]}` | 按预览改名（后台任务，不覆盖已有文件，改完请求 Komga 扫描） |
 | GET | `/api/v1/bangumi/search?q=` | 搜索 Bangumi 条目 |
 

@@ -32,7 +32,7 @@ export const TOKEN_ENDPOINTS = new Set<EndpointKey>([
   'GET /api/tasks', 'POST /api/tasks', 'POST /api/tasks/:id/cancel', 'POST /api/tasks/:id/retry', 'POST /api/tasks/retry-failed', 'POST /api/tasks/cancel-queued',
   'POST /api/queue/pause', 'POST /api/queue/resume', 'GET /api/targets', 'GET /api/activity', 'GET /api/sources', 'GET /api/sources/:id/items',
   'GET /api/library', 'POST /api/library/scan', 'POST /api/library/match-kmoe', 'POST /api/library/match-bangumi', 'POST /api/library/sync-komga',
-  'POST /api/library/folders/:id/sync', 'POST /api/library/rename/preview', 'POST /api/library/rename', 'GET /api/bangumi/search',
+  'POST /api/library/folders/:id/sync', 'POST /api/library/rename/preview', 'POST /api/library/rename/ai', 'POST /api/library/rename', 'GET /api/bangumi/search',
 ]);
 
 export function clientIp(req: Request, server: Server<unknown>) { return server.requestIP(req)?.address ?? 'unknown'; }
