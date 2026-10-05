@@ -1,5 +1,5 @@
 // Text helpers for matching titles on Kmoe and Bangumi: fold Traditional/Japanese character forms to Simplified, compare titles,
-// and read volume numbers from Komga file names, Kmoe item names and Bangumi volume names.
+// and recognise Bangumi volume names (volume numbers of file and item names: shared/books.ts).
 import { JAPANESE, TRADITIONAL } from './chars';
 
 /** Comparable form of a title: width/case folded, spaces/punctuation/symbols dropped, common variant characters unified. */
@@ -60,52 +60,6 @@ export function titleParts(text: string): string[] {
 export function mainTitle(text: string): string | null {
   const main = /^(.+?)\s*(?:[-‐–—~～〜:：|｜/]|[(（【[「『])/.exec(text.trim())?.[1]?.trim();
   return main && length(fold(main)) >= 2 ? main : null;
-}
-
-// ---------- Volume numbers ----------
-export interface BookNumber {
-  kind: 'volume' | 'chapter' | 'extra' | 'unknown';
-  /** First volume number (numberSort); null unless kind is volume. */
-  number: number | null;
-  /** Komga "number": "3", "10.5" or a range like "1-3". */
-  label: string | null;
-  range: boolean;
-}
-
-const NUM = String.raw`(\d+(?:\.\d+)?)(?:\s*[-~～－]\s*(\d+(?:\.\d+)?))?`;
-/** Explicit volume markers: 卷 01, 第1卷, 1-3巻, Vol.01, v01. */
-const STRONG = [
-  new RegExp(String.raw`[卷巻册冊]\s*${NUM}`),
-  new RegExp(String.raw`${NUM}\s*[卷巻册冊]`),
-  new RegExp(String.raw`(?:^|[^a-z])vol(?:ume)?\.?\s*${NUM}`, 'i'),
-  new RegExp(String.raw`(?:^|[^a-z])v${NUM}(?![a-z])`, 'i'),
-];
-/** Weak markers, only after chapter/extra checks: the last "(3)" (not a year), or a trailing number. */
-const WEAK = [/[(（]\s*(\d{1,3}(?:\.\d+)?)\s*[)）][^(（]*$/, /(?:^|[\s_\-－])(\d{1,3}(?:\.\d+)?)\s*$/];
-const CHAPTER = /[話话]\s*\d|\d\s*[話话回]|(?:^|[^a-z])ch(?:ap(?:ter)?)?\.?\s*\d/i;
-const EXTRA = /番外|特典|外[傳传]|短篇|[畫画]集|公式|設定集|设定集|fanbook|artbook/i;
-
-const volume = (match: RegExpExecArray): BookNumber => {
-  const first = Number(match[1]), last = match[2] === undefined ? first : Number(match[2]);
-  const range = last > first;
-  return { kind: 'volume', number: first, label: range ? `${first}-${last}` : String(first), range };
-};
-const kind = (value: BookNumber['kind']): BookNumber => ({ kind: value, number: null, label: null, range: false });
-
-/**
- * What a book file (or Kmoe item / Bangumi volume name) is. `title` (the series title the files are named after) is removed
- * first, so digits in titles like "20世紀少年" are not read as volume numbers. No Roman numerals, ranges stay ranges.
- */
-export function bookNumber(name: string, title?: string | null): BookNumber {
-  let stem = name.normalize('NFKC').replace(/\.(k?epub|mobi|azw3?|pdf|cbz|cbr|cb7|zip|rar|7z)$/i, '').trim();
-  stem = stem.replace(/^\[(?:kmoe|mox|kox|koz|kzo|kxo|kxx|kzz|vol\.moe)[^\]]*\]\[[^\]]*\]/i, '');
-  const prefix = title?.normalize('NFKC').trim();
-  if (prefix && stem.startsWith(prefix)) stem = stem.slice(prefix.length);
-  for (const pattern of STRONG) { const match = pattern.exec(stem); if (match) return volume(match); }
-  if (CHAPTER.test(stem)) return kind('chapter');
-  if (EXTRA.test(stem)) return kind('extra');
-  for (const pattern of WEAK) { const match = pattern.exec(stem); if (match) return volume(match); }
-  return kind('unknown');
 }
 
 /** A Bangumi single-volume subject name: "NANA -ナナ- (11)", "ワンピース 3", "X 第3巻", "X Vol.3". */

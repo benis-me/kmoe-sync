@@ -21,6 +21,7 @@ import { Page, PageHeader } from '@/components/app/page';
 import { StageMenu } from '@/features/library/filters';
 import { FolderRow, type FolderAction, type RowHandlers } from '@/features/library/folder-row';
 import { PolishBanner, PolishReview } from '@/features/library/ai-polish';
+import { RenameDialog } from '@/features/library/rename';
 import { AcceptSuggestions, JobBar, LibraryIntro, LibraryStrip, type JobControl, type JobStart } from '@/features/library/overview';
 import { BangumiDialog, LinkKmoeDialog } from '@/features/library/pickers';
 import { CONFIDENT, applyFolder, applyJob, bestScore, isCurrent, jobLabels } from '@/features/library/state';
@@ -84,7 +85,7 @@ function useJobEndToast(job: LibraryJob | undefined, ai: JobStart | null) {
     if (!before?.running || !job || job.running || !job.kind || job.cancelled) return;
     const { label } = jobLabels(job.kind, ai);
     if (job.error) toast.error(`${label}没有完成`, { description: job.error });
-    else if (job.done >= job.total) toast.success(`${label}完成`, { description: job.kind === 'scan' ? '文件夹列表已更新。' : `处理了 ${job.done} 个文件夹。` });
+    else if (job.done >= job.total) toast.success(`${label}完成`, { description: job.kind === 'scan' ? '文件夹列表已更新。' : job.kind === 'rename' ? `改名了 ${job.done} 个文件。` : `处理了 ${job.done} 个文件夹。` });
   }, [job, ai]);
 }
 
@@ -102,6 +103,8 @@ function LibraryView({ target, targets, filters, onFilters }: { target: Target; 
   const [q, setQ] = useState('');
   const [linking, setLinking] = useState<Opened | null>(null);
   const [picking, setPicking] = useState<Opened | null>(null);
+  // 整理文件名 for the whole target, or (from a folder's menu) one folder.
+  const [renaming, setRenaming] = useState<{ folderIds?: number[]; opener: HTMLElement | null } | null>(null);
   // Back to what opened the dialog; if that is gone (the row changed), to the row's menu button.
   const back = ({ folder, opener }: Opened) => () => opener?.isConnected ? opener : document.querySelector<HTMLElement>(`[data-folder-menu="${folder.id}"]`);
   const [pending, setPending] = useState<ReadonlyMap<number, FolderAction['action']>>(() => new Map());
@@ -167,6 +170,7 @@ function LibraryView({ target, targets, filters, onFilters }: { target: Target; 
   });
   const handlers = useMemo<RowHandlers>(() => ({
     act: act.mutate, link: (folder, opener) => setLinking({ folder, opener }), pickBangumi: (folder, opener) => setPicking({ folder, opener }),
+    rename: (folder, opener) => setRenaming({ folderIds: [folder.id], opener }),
   }), [act.mutate]);
   const jobs: JobControl = { running, starting: start.isPending ? start.variables : null, start: start.mutate, ai: aiKind };
 
@@ -236,7 +240,8 @@ function LibraryView({ target, targets, filters, onFilters }: { target: Target; 
   })].filter(Boolean).join('、') || '全部';
   return <>
     <div className="flex flex-col">
-      <LibraryStrip overview={overview} metadata={meta.data ?? null} kmoeActive={kmoeActive} ai={aiReady} jobs={jobs} filters={applied} onPick={pick} />
+      <LibraryStrip overview={overview} metadata={meta.data ?? null} kmoeActive={kmoeActive} ai={aiReady} jobs={jobs} filters={applied} onPick={pick}
+        onRename={() => setRenaming({ opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })} />
       {jobArea}
     </div>
 
@@ -286,6 +291,7 @@ function LibraryView({ target, targets, filters, onFilters }: { target: Target; 
 
     {linking && <LinkKmoeDialog key={linking.folder.id} folder={linking.folder} returnFocus={back(linking)} onClose={() => setLinking(null)} />}
     {reviewing && <PolishReview targetId={target.id} onClose={() => setReviewing(false)} />}
+    {renaming && <RenameDialog target={target} folderIds={renaming.folderIds} returnFocus={() => renaming.opener?.isConnected ? renaming.opener : null} onClose={() => setRenaming(null)} />}
     {picking && <BangumiDialog key={picking.folder.id} folderId={picking.folder.id} label={picking.folder.path} query={picking.folder.hint ?? picking.folder.name}
       bangumi={picking.folder.metadata.bangumi} returnFocus={back(picking)} onClose={() => setPicking(null)} />}
   </>;

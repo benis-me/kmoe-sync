@@ -110,13 +110,13 @@ export function createWebdavTarget(options: { url: string; username?: string | n
     } catch { return null; }
   }
 
-  async function request(method: 'PROPFIND' | 'MKCOL', path: string, options: { dir?: boolean; depth?: '0' | '1'; signal?: AbortSignal }) {
+  async function request(method: 'PROPFIND' | 'MKCOL' | 'MOVE', path: string, options: { dir?: boolean; depth?: '0' | '1'; signal?: AbortSignal; headers?: Record<string, string> }) {
     const { dir, depth, signal } = options;
     const timeout = AbortSignal.timeout(timeouts.request);
     try {
       const response = await fetch(href(path, dir), {
         method, credentials: 'omit', redirect: 'error', signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-        headers: depth ? { ...auth, Depth: depth, 'Content-Type': 'application/xml' } : auth,
+        headers: depth ? { ...auth, Depth: depth, 'Content-Type': 'application/xml' } : { ...auth, ...options.headers },
         body: depth ? PROPFIND : undefined,
       });
       return { status: response.status, body: await response.text() };
@@ -218,6 +218,17 @@ export function createWebdavTarget(options: { url: string; username?: string | n
     return 'stored';
   }
 
+  async function move(from: string, to: string, signal?: AbortSignal): Promise<void> {
+    const source = checked(() => normalizePath(from)), dest = checked(() => normalizePath(to));
+    if (source === '/' || dest === '/') throw new StorageError('invalid', '文件路径无效');
+    const taken = (status?: number) => new StorageError('conflict', `已有同名文件：${dest}`, false, status);
+    // Checked up front too: a server that ignores Overwrite: F would replace the file.
+    if (await stat(dest, signal)) throw taken();
+    const { status } = await request('MOVE', remote(source), { signal, headers: { Destination: href(remote(dest)), Overwrite: 'F' } });
+    if (status === 412) throw taken(status);
+    if (status < 200 || status >= 300) throw httpError(status, '改名', source);
+  }
+
   const label = `${origin}${root === '/' ? '' : root}`;
   async function test(signal?: AbortSignal): Promise<{ ok: boolean; message: string }> {
     try {
@@ -239,5 +250,5 @@ export function createWebdavTarget(options: { url: string; username?: string | n
     }
   }
 
-  return { kind: 'webdav', label, list, stat, ensureDir, put, test };
+  return { kind: 'webdav', label, list, stat, ensureDir, put, move, test };
 }

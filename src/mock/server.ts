@@ -2,14 +2,15 @@
 // Requests are validated with the contract's schemas (like the real server) and, in dev, so are responses.
 import type { z } from 'zod';
 import { endpoints, type EndpointKey, type ResponseOf } from '@shared/api';
+import { planRename } from '@shared/books';
 import {
   Activity as ActivitySchema, BangumiArchiveStatus as ArchiveSchema, LibraryJob as LibraryJobSchema, Status as StatusSchema, Task as TaskSchema,
   type Activity, type BangumiCandidate, type BangumiSubject, type ComicDetail, type ComicFolder, type ComicSummary, type DirEntry, type FolderMetadata, type Format,
-  type Item, type ItemStateInfo, type KmoeCandidate, type LibraryCheck, type LibraryFolder, type LibraryJobKind, type LibraryOverview, type Line, type MetadataSettings,
+  type Item, type ItemStateInfo, type KmoeCandidate, type LibraryCheck, type LibraryFolder, type LibraryJobKind, type LibraryOverview, type Line, type MetadataSettings, type RenameFolder,
   type AiPolishItem, type AiSettings, type AiVerdict, type ChatEvent, type ChatMessage, type PolicyImpact, type QueueCounts, type QueueState, type ServerEvent, type ShelfEntry, type Source, type SourceItem, type Status,
   type Subscription, type SubscriptionInput, type Target, type TargetInput, type Task,
 } from '@shared/model';
-import { DEFAULT_RULE, NamingError, joinPath, normalizePath, renderRule, validateRule } from '@shared/naming';
+import { DEFAULT_RULE, NamingError, joinPath, kmoeFilename, normalizePath, renderRule, validateRule } from '@shared/naming';
 import { tally } from '@/features/library/state';
 import { formatMB } from '@/lib/format';
 import { version } from '../../package.json';
@@ -74,7 +75,7 @@ const subjectOf = (entry: BangumiEntry, withCover: boolean): BangumiSubject => (
   id: entry.id, name: entry.name, nameCn: entry.nameCn, platform: entry.platform ?? '漫画', date: entry.date, cover: withCover ? coverFor(entry.nameCn, `bgm-${entry.id}`) : null,
   volumes: entry.volumes, authors: entry.authors, series: entry.series ?? true, url: `https://bgm.tv/subject/${entry.id}`,
 });
-const JOB_NAMES: Record<LibraryJobKind, string> = { scan: '扫描书库', kmoe: '匹配 Kmoe', bangumi: '匹配 Bangumi', komga: '同步到 Komga', ai: 'AI 处理', follow: '订阅连载中的漫画' };
+const JOB_NAMES: Record<LibraryJobKind, string> = { scan: '扫描书库', kmoe: '匹配 Kmoe', bangumi: '匹配 Bangumi', komga: '同步到 Komga', ai: 'AI 处理', follow: '订阅连载中的漫画', rename: '整理文件名' };
 /** Komga problems the demo shows: locked for good, not scanned by Komga yet, or a failure that goes away on retry. */
 const KOMGA_LOCKED = new Set(['寄生獸 完全版']), KOMGA_MISSING = new Set(['惡之華', 'BLUE GIANT EXPLORER']);
 const KOMGA_FLAKY: Record<string, string> = { AKIRA: '连接 Komga 超时（10 秒），稍后重试', 我推的孩子: 'Komga 返回 500：写入第 16 卷的信息时出错' };
@@ -516,7 +517,7 @@ export function createMockServer(scenario: Scenario) {
 
   /** The naming rule's folder for a comic, relative to the target. */
   function ruleDir(target: Target, comic: MockComic) {
-    const file = joinPath('/', renderRule(target.rule, { title: comic.title, filename: `[Kmoe][${comic.title}]卷01`, bookname: comic.items[0]?.name ?? '卷 01', author: comic.authors, ext: 'epub' }));
+    const file = joinPath('/', renderRule(target.rule, { title: comic.title, filename: kmoeFilename(comic.title, '卷 01'), bookname: comic.items[0]?.name ?? '卷 01', author: comic.authors, ext: 'epub' }));
     return file.slice(0, file.lastIndexOf('/')) || '/';
   }
   const dirOf = (comic: MockComic, target: Target) => db.comicFolders.get(`${comic.key}|${target.id}`) ?? ruleDir(target, comic);
@@ -799,6 +800,34 @@ export function createMockServer(scenario: Scenario) {
       if (match && db.kmoe.state === 'active') kmoeJob(target, false); else finishJob(target.id);
     }, 60);
   }
+  // ---------- 整理文件名: the real planner over the demo's files ----------
+  const fileRule = (target: Target) => target.rule.split('/').filter(Boolean).at(-1)!;
+  function renamePlan(f: MockFolder, target: Target, ai?: ReadonlyMap<string, { item: string; confidence: number }>): RenameFolder {
+    const comic = comicOf(f.kmoe.comicKey!), dir = joinPath(target.path, f.path);
+    const records = new Map<string, string>();
+    for (const [key, file] of db.library) {
+      const [targetId, , itemId] = key.split('|');
+      if (Number(targetId) === target.id && file.path.startsWith(`${dir}/`) && !file.path.slice(dir.length + 1).includes('/')) records.set(leaf(file.path).normalize('NFC'), itemId!);
+    }
+    return {
+      folderId: f.id, path: f.path, title: comic.title, comicKey: comic.key, error: null,
+      ...planRename({
+        title: comic.title, authors: comic.authors, hint: hintOf(f.files.filter(name => BOOK.test(name))), rule: fileRule(target), records, ai,
+        items: comic.items.map(entry => ({ id: entry.id, type: entry.type, name: entry.name, sort_order: entry.order })),
+        entries: listDir(fsOf(target), dir).map(entry => ({ name: entry.name, directory: entry.directory })),
+      }),
+    };
+  }
+  function renameFile(target: Target, f: MockFolder, name: string, to: string) {
+    const dir = joinPath(target.path, f.path), from = joinPath(dir, name), dest = joinPath(dir, to);
+    if (filesOn(fsOf(target)).has(dest)) throw new Fail(409, 'conflict', `已有同名文件「${to}」`);
+    for (const file of db.library.values()) if (file.path === from) file.path = dest;
+    const extras = db.extras.get(fsOf(target)), at = extras?.indexOf(from) ?? -1;
+    if (extras && at >= 0) extras[at] = dest;
+    f.files = f.files.map(file => file === name ? to : file).sort((a, b) => a.localeCompare(b, 'zh-CN', { numeric: true }));
+    if (f.kmoe.comicKey) emit({ type: 'comic', key: f.kmoe.comicKey });
+  }
+
   function metadataView(): MetadataSettings {
     const { enabled, komga, bangumi, options } = db.metadata;
     return {
@@ -1100,6 +1129,35 @@ export function createMockServer(scenario: Scenario) {
     'GET /api/library/ai-polish': ({ query }) => foldersOf(targetOf(query.targetId).id).flatMap((f): AiPolishItem[] => f.polish ? [{
       folderId: f.id, path: f.path, title: f.metadata.bangumi.subject?.nameCn || leaf(f.path), original: f.polish.original, polished: f.polish.polished, status: f.polish.status, at: f.polish.at,
     }] : []),
+    'POST /api/library/rename/preview': ({ body }) => {
+      const target = targetOf(body.targetId);
+      const plans = foldersOf(target.id).filter(f => f.kmoe.state === 'matched' && f.kmoe.comicKey && (!body.folderIds || body.folderIds.includes(f.id))).map(f => renamePlan(f, target));
+      const library = db.metadata.komga.libraries.find(l => l.targetId === target.id);
+      return {
+        targetId: target.id, rule: fileRule(target), named: plans.reduce((sum, plan) => sum + plan.named, 0), folders: plans.filter(plan => plan.files.length),
+        komga: komgaOn(target.id) && library ? { name: KOMGA_LIBRARIES.find(l => l.id === library.libraryId)?.name ?? library.libraryId, hashFiles: true } : null,
+      };
+    },
+    'POST /api/library/rename/ai': ({ body }) => {
+      requireAi();
+      const f = folderById(String(body.folderId)), target = targetOf(f.targetId), comic = comicOf(f.kmoe.comicKey!);
+      // The demo's AI: the last number in the name is the volume, and it is not quite sure.
+      const readings = new Map<string, { item: string; confidence: number }>();
+      for (const file of renamePlan(f, target).files.filter(file => !file.item)) {
+        const entry = comic.items.find(i => i.type === 'volume' && i.order === Number(file.name.match(/(\d+)\D*$/)?.[1]));
+        if (entry) readings.set(file.name.normalize('NFC'), { item: entry.id, confidence: 0.72 });
+      }
+      return renamePlan(f, target, readings);
+    },
+    'POST /api/library/rename': ({ body }) => {
+      ensureIdle();
+      const target = targetOf(body.targetId);
+      const folders = new Set(body.renames.map(op => op.folderId));
+      return runJob('rename', target, body.renames.map(op => ({ label: folderById(String(op.folderId)).path, run: () => renameFile(target, folderById(String(op.folderId)), op.name, op.to) })), () => {
+        log('info', 'success', `整理文件名：改名了 ${folders.size} 部的 ${body.renames.length} 个文件`, null);
+        finishJob(target.id);
+      }, 40);
+    },
     'POST /api/library/ai-polish/decide': ({ body }) => {
       let updated = 0;
       for (const f of db.folders) {

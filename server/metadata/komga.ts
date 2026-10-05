@@ -89,6 +89,10 @@ export class KomgaClient {
     const rows = await this.json<{ id: string; name: string; root: string }[]>('GET', '/api/v1/libraries', { signal });
     return rows.map(row => ({ id: row.id, name: row.name, root: row.root }));
   }
+  /** One library's settings; hashFiles: Komga hashes book files, so a renamed or moved file keeps its read progress. */
+  library(id: string, signal?: AbortSignal): Promise<{ id: string; name: string; hashFiles?: boolean }> {
+    return this.json('GET', `/api/v1/libraries/${encodeURIComponent(id)}`, { signal });
+  }
   /** Server version from /actuator/info (admin only). */
   async version(signal?: AbortSignal): Promise<string | null> {
     return (await this.json<{ build?: { version?: string } }>('GET', '/actuator/info', { signal })).build?.version ?? null;

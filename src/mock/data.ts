@@ -3,7 +3,7 @@ import type {
   Activity, AiProvider, AiVerdict, BangumiArchiveStatus, BangumiSource, ContentType, FolderMetadata, Format, Item, KmoeAccount, KmoeCandidate, KmoeLinkState, KomgaLibrary, LibraryJob,
   MetadataOptions, MetadataText, PauseReason, Settings, Source, SourceItem, Subscription, Target, Task,
 } from '@shared/model';
-import { DEFAULT_RULE, joinPath, renderRule } from '@shared/naming';
+import { DEFAULT_RULE, joinPath, kmoeFilename, renderRule } from '@shared/naming';
 import { version } from '../../package.json';
 import { coverFor, hash } from './covers';
 
@@ -257,7 +257,7 @@ export const libraryKey = (targetId: number, format: Format, itemId: string) => 
 /** Where a chapter lands in a target, with the target's naming rule (relative to the library root for local targets). */
 export function filePath(target: Target, comic: MockComic, entry: Item, format: Format): string {
   const bookname = entry.name;
-  return joinPath(target.path, renderRule(target.rule, { title: comic.title, filename: `[Kmoe][${comic.title}]${bookname.replace(/\s/g, '')}`, bookname, author: comic.authors, ext: format }));
+  return joinPath(target.path, renderRule(target.rule, { title: comic.title, filename: kmoeFilename(comic.title, bookname), bookname, author: comic.authors, ext: format }));
 }
 
 const DEFAULT_SETTINGS: MockDb['settings'] = {

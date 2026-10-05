@@ -142,6 +142,37 @@ export function createLocalTarget(options: { libraryRoot: string; path: string }
     return 'stored';
   }
 
+  async function move(from: string, to: string, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
+    // Both names as given, in their real folders: a symlink is never followed to rename what it points at, and resolving
+    // the new name would bring back the old file's case on case-insensitive file systems.
+    const at = async (raw: string) => {
+      const path = checked(() => normalizePath(raw));
+      if (path === '/') throw new StorageError('invalid', '文件路径无效');
+      return { path, real: join((await locate(dirname(path))).real, basename(path)) };
+    };
+    const source = await at(from), dest = await at(to);
+    const found = await fs.lstat(source.real).catch(() => null);
+    if (!found) throw new StorageError('not_found', `文件不存在：${source.path}`);
+    if (!found.isFile()) throw new StorageError('invalid', `不是普通文件，没有改名：${source.path}`);
+    const taken = () => new StorageError('conflict', `已有同名文件：${dest.path}`);
+    // A hard link takes the new name only while it is free; the old name goes after.
+    try { await fs.link(source.real, dest.real); } catch (error) {
+      const there = code(error) === 'EEXIST' ? await fs.lstat(dest.real).catch(() => null) : null;
+      // The same file under another case (macOS, SMB shares): a rename changes just the case.
+      if (there && there.ino === found.ino && there.dev === found.dev) return await fs.rename(source.real, dest.real).catch(rename => { throw failure(rename, dest.real); });
+      if (code(error) === 'EEXIST') throw taken();
+      if (!NO_LINK.has(code(error))) throw failure(error, dest.real);
+      // ponytail: without hard links (SMB, exFAT) it is check-then-rename; another writer could take the name in between.
+      if (await fs.lstat(dest.real).catch(() => null)) throw taken();
+      return await fs.rename(source.real, dest.real).catch(rename => { throw failure(rename, dest.real); });
+    }
+    await fs.unlink(source.real).catch(async error => {
+      await fs.unlink(dest.real).catch(() => undefined);
+      throw failure(error, source.real);
+    });
+  }
+
   async function test(signal?: AbortSignal): Promise<{ ok: boolean; message: string }> {
     try {
       const found = await stat('/', signal);
@@ -161,5 +192,5 @@ export function createLocalTarget(options: { libraryRoot: string; path: string }
 
   // The scratch dir is created by whoever downloads into it (mkdir -p), not up front; list() hides it.
   const localPath = async (path: string) => (await locate(path)).real;
-  return { kind: 'local', label: dir, scratchDir: join(dir, `${OWN}-tmp`), list, stat, ensureDir, put, test, localPath };
+  return { kind: 'local', label: dir, scratchDir: join(dir, `${OWN}-tmp`), list, stat, ensureDir, put, move, test, localPath };
 }

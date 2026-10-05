@@ -1,6 +1,7 @@
 // Writing Bangumi metadata to one Komga series and its books. A field Bangumi lacks is left out (never blanked), written
 // fields are locked when asked, fields that already hold the value are not sent again (re-syncs are quiet), and fields
 // someone locked in Komga are left as they are.
+import { bookNumber, itemNumber, type BookNumber } from '@shared/books';
 import type { MetadataOptions, MetadataText } from '@shared/model';
 import { AppError } from '../http/errors';
 import { errorMessage } from '../lib/retry';
@@ -9,7 +10,7 @@ import {
   creators, infobox, subjectUrl, traditionalEdition, type BangumiApi, type BgmPerson, type BgmRelated, type BgmSubject,
 } from './bangumi';
 import { below, type KomgaClient, type KomgaLink } from './komga';
-import { bookNumber, fold, surname, type BookNumber } from './text';
+import { fold, surname } from './text';
 
 export type Language = 'zh-Hant' | 'zh-Hans';
 /** Kmoe sells Taiwan (繁體) editions; its "語言" is 繁體 or missing for them. Japanese/English editions get no language. */
@@ -138,14 +139,6 @@ export function volumeMap(related: BgmRelated[]): Map<number, BgmRelated> {
     if (!previous || (SPECIAL_EDITION.test(previous.name) && !SPECIAL_EDITION.test(entry.name))) map.set(number, entry);
   }
   return map;
-}
-
-/** What a Kmoe item is: 卷 NN volumes (else their order), 話 chapter packs, 番外 extras. */
-export function itemNumber(item: Pick<ItemRow, 'type' | 'name' | 'sort_order'>): BookNumber {
-  if (item.type !== 'volume') return { kind: item.type === 'serial' ? 'chapter' : 'extra', number: null, label: null, range: false };
-  const parsed = bookNumber(item.name);
-  if (parsed.kind === 'volume' || item.sort_order === null) return parsed;
-  return { kind: 'volume', number: item.sort_order, label: String(item.sort_order), range: false };
 }
 
 const ROLES: Record<string, string> = { 作者: 'writer', 原作: 'writer', 作画: 'penciller' };

@@ -166,8 +166,11 @@ export const LibraryFolder = z.object({
 });
 export type LibraryFolder = z.infer<typeof LibraryFolder>;
 
-/** One background library job at a time: scan folders, match Kmoe, match Bangumi, sync Komga, an AI pass, or follow ongoing comics. */
-export const LibraryJobKind = z.enum(['scan', 'kmoe', 'bangumi', 'komga', 'ai', 'follow']);
+/**
+ * One background library job at a time: scan folders, match Kmoe, match Bangumi, sync Komga, an AI pass, follow ongoing
+ * comics, or rename book files (整理文件名).
+ */
+export const LibraryJobKind = z.enum(['scan', 'kmoe', 'bangumi', 'komga', 'ai', 'follow', 'rename']);
 export type LibraryJobKind = z.infer<typeof LibraryJobKind>;
 export const LibraryJob = z.object({
   kind: Nullable(LibraryJobKind),
@@ -204,6 +207,46 @@ export const LibraryOverview = z.object({
   follow: z.number(),
 });
 export type LibraryOverview = z.infer<typeof LibraryOverview>;
+
+// ---------- 整理文件名: book files of linked folders renamed to the target's naming rule ----------
+/** A book file the rule names differently, or one that stays as it is (`to` null, `note` says why). */
+export const RenameFile = z.object({
+  name: z.string(),
+  to: Nullable(z.string()),
+  /** The Kmoe item the file holds ("卷 01"); null when it was not recognised. */
+  item: Nullable(z.string()),
+  /** How it was recognised: downloaded by this service, by its name, or read by the AI (with its confidence). */
+  source: Nullable(z.enum(['record', 'name', 'ai'])),
+  confidence: Nullable(z.number()),
+  note: Nullable(z.string()),
+});
+export type RenameFile = z.infer<typeof RenameFile>;
+export const RenameFolder = z.object({
+  folderId: z.number(),
+  path: z.string(),
+  title: z.string(),
+  comicKey: z.string(),
+  /** Book files already named as the rule says. */
+  named: z.number(),
+  files: z.array(RenameFile),
+  /** Why the folder could not be planned (unreadable, no Kmoe chapters yet). */
+  error: Nullable(z.string()),
+});
+export type RenameFolder = z.infer<typeof RenameFolder>;
+export const RenamePreview = z.object({
+  targetId: z.number(),
+  /** The rule's file-name part ("{title} - {bookname}"): files keep their folders. */
+  rule: z.string(),
+  /** Folders with something to rename or to look at. */
+  folders: z.array(RenameFolder),
+  /** Book files already named as the rule says, in all linked folders. */
+  named: z.number(),
+  /** The Komga library reading this target: without file hashes, Komga takes renamed files for new books (read progress is lost). */
+  komga: Nullable(z.object({ name: z.string(), hashFiles: z.boolean() })),
+});
+export type RenamePreview = z.infer<typeof RenamePreview>;
+export const Rename = z.object({ folderId: z.number().int(), name: z.string().min(1).max(255), to: z.string().min(1).max(255) });
+export type Rename = z.infer<typeof Rename>;
 
 /** Where a comic's files live on the viewed target: a mapped existing folder, or the naming rule's folder. */
 export const ComicFolder = z.object({ targetId: z.number(), path: z.string(), mapped: z.boolean(), folderId: Nullable(z.number()) });

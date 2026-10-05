@@ -1,4 +1,5 @@
-// In-memory WebDAV server for storage tests: PROPFIND (Depth 0/1), MKCOL, PUT (If-None-Match), GET, optional Basic auth.
+// In-memory WebDAV server for storage tests: PROPFIND (Depth 0/1), MKCOL, PUT (If-None-Match), MOVE (files, Overwrite), GET,
+// optional Basic auth.
 // Three multistatus dialects: "d:" prefixes, Apache-style mixed prefixes with a 404 propstat, and a default namespace with
 // absolute-URL hrefs and numeric character references.
 type Entry = { dir: true } | { dir: false; size: number; bytes?: Uint8Array<ArrayBuffer> };
@@ -74,6 +75,16 @@ export function startFakeDav(options: { auth?: { username: string; password: str
           const bytes = new Uint8Array(await request.arrayBuffer());
           tree.set(path, { dir: false, size: bytes.length, bytes });
           return new Response('', { status: entry ? 204 : 201 });
+        }
+        case 'MOVE': {
+          if (!entry || entry.dir) return new Response('', { status: 404 });
+          const destination = decodeURIComponent(new URL(request.headers.get('destination') ?? '', request.url).pathname).replace(/(.)\/+$/, '$1');
+          const exists = tree.has(destination);
+          if (exists && request.headers.get('overwrite')?.toUpperCase() === 'F') return new Response('', { status: 412 });
+          if (!tree.get(parent(destination))?.dir) return new Response('', { status: 409 });
+          tree.delete(path);
+          tree.set(destination, entry);
+          return new Response('', { status: exists ? 204 : 201 });
         }
         case 'GET':
           return entry && !entry.dir ? new Response(entry.bytes ?? new Uint8Array(entry.size)) : new Response('', { status: 404 });

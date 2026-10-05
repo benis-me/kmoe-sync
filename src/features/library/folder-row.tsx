@@ -2,7 +2,7 @@
 // Memoized: rows only re-render when their folder (kept stable by structural sharing), pending action or job focus change.
 import { memo, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { ArrowUpRight, BookOpen, Check, CircleDashed, Ellipsis, EyeOff, Folder, Link2, LoaderCircle, RefreshCw, RotateCcw, SearchX, Sparkles, Tags, Undo2 } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Check, CircleDashed, Ellipsis, EyeOff, FilePen, Folder, Link2, LoaderCircle, RefreshCw, RotateCcw, SearchX, Sparkles, Tags, Undo2 } from 'lucide-react';
 import { cn } from 'cn';
 import { statusOf } from '@shared/folder-status';
 import type { AiVerdict, LibraryFolder } from '@shared/model';
@@ -16,7 +16,10 @@ import { bestOf, bestScore, parentOf, percentOf } from './state';
 
 export type FolderAction = { folder: LibraryFolder; action: 'confirm'; comic: string } | { folder: LibraryFolder; action: 'ignore' | 'reset' | 'sync' };
 /** `opener` gets focus back when the dialog closes (the row's menu button when it was a menu item). */
-export type RowHandlers = { act: (action: FolderAction) => void; link: (folder: LibraryFolder, opener: HTMLElement | null) => void; pickBangumi: (folder: LibraryFolder, opener: HTMLElement | null) => void };
+export type RowHandlers = {
+  act: (action: FolderAction) => void; link: (folder: LibraryFolder, opener: HTMLElement | null) => void; pickBangumi: (folder: LibraryFolder, opener: HTMLElement | null) => void;
+  rename: (folder: LibraryFolder, opener: HTMLElement | null) => void;
+};
 
 const thumb = 'w-7 shrink-0 rounded-[5px]';
 /** Stand-in for a cover when there is no comic: same size, so every state keeps the row height. */
@@ -156,7 +159,10 @@ export const FolderRow = memo(function FolderRow({ folder, index, pending, busy,
         <Button ref={menu} data-folder-menu={folder.id} variant="ghost" size="icon-sm" className="text-muted-foreground lg:order-last" aria-label={`更多操作：${folder.name}`}><Ellipsis /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent>
-        {kmoe.comic && <DropdownMenuItem asChild><Link to="/comics/$key" params={{ key: kmoe.comic.key }} search={{ targetId: folder.targetId }}><BookOpen />打开漫画</Link></DropdownMenuItem>}
+        {kmoe.comic && <>
+          <DropdownMenuItem asChild><Link to="/comics/$key" params={{ key: kmoe.comic.key }} search={{ targetId: folder.targetId }}><BookOpen />打开漫画</Link></DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handlers.rename(folder, menu.current)}><FilePen />整理文件名…</DropdownMenuItem>
+        </>}
         <DropdownMenuItem onSelect={() => handlers.link(folder, menu.current)}><Link2 />{kmoe.state === 'matched' ? '更换 Kmoe 漫画…' : '关联 Kmoe 漫画…'}</DropdownMenuItem>
         {kmoe.state !== 'pending' && <DropdownMenuItem onSelect={() => handlers.act({ folder, action: 'reset' })}>
           {kmoe.state === 'ignored' ? <><Undo2 />恢复</> : <><RotateCcw />重新匹配</>}

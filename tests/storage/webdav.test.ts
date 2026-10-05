@@ -187,6 +187,26 @@ describe('put', () => {
   });
 });
 
+describe('move', () => {
+  it('renames with MOVE and Overwrite: F, and never onto an existing file', async () => {
+    dav.seed({ '/dav/Comics/鏈鋸人/[Kmoe][鏈鋸人]卷01.epub': 3, '/dav/Comics/鏈鋸人/鏈鋸人 - 卷 02.epub': 4 });
+    await target().move('/鏈鋸人/[Kmoe][鏈鋸人]卷01.epub', '/鏈鋸人/鏈鋸人 - 卷 01.epub');
+    expect([...dav.tree.keys()].filter(path => path.startsWith('/dav/Comics/鏈鋸人/')).sort()).toEqual(['/dav/Comics/鏈鋸人/鏈鋸人 - 卷 01.epub', '/dav/Comics/鏈鋸人/鏈鋸人 - 卷 02.epub']);
+    const moved = dav.requests.find(request => request.method === 'MOVE')!;
+    expect(moved.headers.get('overwrite')).toBe('F');
+    expect(decodeURIComponent(moved.headers.get('destination')!)).toBe(`${dav.url}/Comics/鏈鋸人/鏈鋸人 - 卷 01.epub`);
+    expect(await failure(target().move('/鏈鋸人/鏈鋸人 - 卷 01.epub', '/鏈鋸人/鏈鋸人 - 卷 02.epub'))).toMatchObject({ code: 'conflict' });
+    expect(dav.tree.get('/dav/Comics/鏈鋸人/鏈鋸人 - 卷 02.epub')).toMatchObject({ size: 4 });
+    expect(await failure(target().move('/鏈鋸人/nope.epub', '/鏈鋸人/x.epub'))).toMatchObject({ code: 'not_found' });
+  });
+  it('a server that ignores Overwrite still never replaces a file', async () => {
+    dav.seed({ '/dav/Comics/a.epub': 1, '/dav/Comics/b.epub': 2 });
+    dav.state.override = request => request.method === 'MOVE' ? new Response('', { status: 204 }) : undefined;
+    expect(await failure(target().move('/a.epub', '/b.epub'))).toMatchObject({ code: 'conflict' });
+    expect(dav.requests.some(request => request.method === 'MOVE')).toBe(false);
+  });
+});
+
 describe('test()', () => {
   it('reports success and explains the usual failures', async () => {
     dav.seed({ '/dav/file.epub': 3 }, ['/dav/Comics']);

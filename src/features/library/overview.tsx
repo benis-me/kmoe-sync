@@ -1,7 +1,7 @@
 // 书库 overview: the status strip (counts + the job each column starts), the running job, and the first-run intro.
 import { Fragment, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { BookmarkPlus, Check, FolderSearch, Link2, LoaderCircle, RefreshCw, ScanSearch, Settings2, Sparkles, Tags, WandSparkles, X } from 'lucide-react';
+import { BookmarkPlus, Check, FilePen, FolderSearch, Link2, LoaderCircle, RefreshCw, ScanSearch, Settings2, Sparkles, Tags, WandSparkles, X } from 'lucide-react';
 import { cn } from 'cn';
 import { STAGES, countBy, optionOf, type FolderFilters, type Stage } from '@shared/folder-status';
 import type { LibraryJob, LibraryJobKind, LibraryOverview, MetadataSettings, Target } from '@shared/model';
@@ -60,9 +60,9 @@ const settingsLink = (label: string, section: 'account' | 'metadata', hash?: str
 const Actions = ({ children }: { children: ReactNode }) => <div className="flex flex-wrap items-center">{children}</div>;
 
 /** `metadata` null: the metadata settings could not be read (shown as not enabled). `ai`: AI is set up (设置 → AI). */
-/** `filters`/`onPick`: the list's filters, which the counts show and set. */
-export function LibraryStrip({ overview, metadata, kmoeActive, ai, jobs, filters, onPick }: {
-  overview: LibraryOverview; metadata: MetadataSettings | null; kmoeActive: boolean; ai: boolean; jobs: JobControl; filters: FolderFilters; onPick: Pick;
+/** `filters`/`onPick`: the list's filters, which the counts show and set. `onRename`: opens 整理文件名. */
+export function LibraryStrip({ overview, metadata, kmoeActive, ai, jobs, filters, onPick, onRename }: {
+  overview: LibraryOverview; metadata: MetadataSettings | null; kmoeActive: boolean; ai: boolean; jobs: JobControl; filters: FolderFilters; onPick: Pick; onRename: () => void;
 }) {
   const { counts, folders, scannedAt } = overview;
   // Counted like the rows and the filter menus read them, so a count shows exactly as many rows.
@@ -77,7 +77,14 @@ export function LibraryStrip({ overview, metadata, kmoeActive, ai, jobs, filters
   const noBangumi = bangumiBlocked(metadata?.bangumi);
   return <section aria-label="书库概览" className={cn('grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-border shadow-soft ring-1 ring-border', metaOn ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
     <Cell label="文件夹" value={`${counts.folders} 个`} sub={`${counts.books} 本 · ${scannedAt ? `${fromNow(scannedAt)}扫描` : '尚未扫描'}`}
-      action={<JobButton kind="scan" jobs={jobs} icon={<ScanSearch data-icon="inline-start" />}>{scannedAt ? '重新扫描' : '扫描书库'}</JobButton>} />
+      action={<Actions>
+        <JobButton kind="scan" jobs={jobs} icon={<ScanSearch data-icon="inline-start" />}>{scannedAt ? '重新扫描' : '扫描书库'}</JobButton>
+        {n(kmoe, 'matched') > 0 && <Button variant="ghost" size="xs" className="text-muted-foreground" aria-disabled={!!jobs.running}
+          title={jobs.running?.kind ? `${jobLabels(jobs.running.kind, jobs.ai).running}，完成后再试` : '按命名规则给已关联漫画的文件改名'}
+          onClick={() => { if (!jobs.running) onRename(); }}>
+          {jobs.running?.kind === 'rename' ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <FilePen data-icon="inline-start" />}整理文件名
+        </Button>}
+      </Actions>} />
     <Cell label="Kmoe" value={`已关联 ${n(kmoe, 'matched')}`} sub={!kmoeActive ? <span className="text-warning">登录 Kmoe 后才能匹配</span> : picks('kmoe', kmoe, ['suggested', 'unmatched', 'pending'], done)}
       action={kmoeActive ? <Actions>
         <JobButton kind="kmoe" jobs={jobs} icon={<Link2 data-icon="inline-start" />}>匹配 Kmoe</JobButton>

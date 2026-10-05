@@ -404,10 +404,30 @@ export class MetadataService {
     return result;
   }
 
-  /** A folder's content or Kmoe link changed (new downloads, import, relink): sync it again when possible. */
-  markDirty(folderId: number): void {
-    this.deps.db.run(`INSERT INTO folder_metadata (folder_id, dirty, updated_at) VALUES (?, 1, ?)
-      ON CONFLICT (folder_id) DO UPDATE SET dirty = 1, attempts = 0, next_attempt_at = NULL, updated_at = excluded.updated_at`, [folderId, now()]);
+  /**
+   * A folder's content or Kmoe link changed (new downloads, import, relink): sync it again when possible, or after `minutes`
+   * (renamed files show in Komga only after its scan).
+   */
+  markDirty(folderId: number, minutes = 0): void {
+    const next = minutes ? new Date(Date.now() + minutes * 60_000).toISOString() : null;
+    this.deps.db.run(`INSERT INTO folder_metadata (folder_id, dirty, next_attempt_at, updated_at) VALUES (?, 1, ?, ?)
+      ON CONFLICT (folder_id) DO UPDATE SET dirty = 1, attempts = 0, next_attempt_at = excluded.next_attempt_at, updated_at = excluded.updated_at`, [folderId, next, now()]);
+  }
+
+  /** The Komga library reading a target, and whether it hashes files (then renamed books keep their read progress there). */
+  async komgaLibrary(targetId: number): Promise<{ name: string; hashFiles: boolean } | null> {
+    const stored = this.stored(), libraryId = this.libraryOf(targetId, stored), run = stored.enabled ? this.newRun(AbortSignal.timeout(10_000)) : null;
+    if (!libraryId || !run) return null;
+    const library = await run.komga.library(libraryId, run.signal);
+    return { name: library.name, hashFiles: library.hashFiles === true };
+  }
+
+  /** Files on a target were renamed: Komga shows the new names after it scans the library. */
+  async rescan(targetId: number): Promise<void> {
+    const stored = this.stored(), libraryId = this.libraryOf(targetId, stored), run = stored.enabled ? this.newRun() : null;
+    if (!libraryId || !run) return;
+    this.scans.set(libraryId, Date.now());
+    await run.komga.scan(libraryId).catch(error => console.warn(`[metadata] Komga scan ${libraryId}: ${errorMessage(error)}`));
   }
 
   // ---------- Matching ----------

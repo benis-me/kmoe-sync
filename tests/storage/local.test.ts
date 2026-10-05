@@ -153,3 +153,47 @@ it('test() checks that the directory exists, is a directory and is writable', as
     finally { chmodSync(join(root, 'ro'), 0o755); }
   }
 });
+
+it('renames a file in place, never onto another entry', async () => {
+  const library = join(root, '漫画');
+  mkdirSync(join(library, '鏈鋸人'), { recursive: true });
+  writeFileSync(join(library, '鏈鋸人', '[Kmoe][鏈鋸人]卷01.epub'), 'one');
+  writeFileSync(join(library, '鏈鋸人', '鏈鋸人 - 卷 02.epub'), 'two');
+  const storage = createLocalTarget({ libraryRoot: root, path: '/漫画' });
+  await storage.move('/鏈鋸人/[Kmoe][鏈鋸人]卷01.epub', '/鏈鋸人/鏈鋸人 - 卷 01.epub');
+  expect(readdirSync(join(library, '鏈鋸人')).sort()).toEqual(['鏈鋸人 - 卷 01.epub', '鏈鋸人 - 卷 02.epub']);
+  expect(readFileSync(join(library, '鏈鋸人', '鏈鋸人 - 卷 01.epub'), 'utf8')).toBe('one');
+  const taken = await storage.move('/鏈鋸人/鏈鋸人 - 卷 01.epub', '/鏈鋸人/鏈鋸人 - 卷 02.epub').catch(error => error);
+  expect(taken).toBeInstanceOf(StorageError);
+  expect(taken).toMatchObject({ code: 'conflict' });
+  expect(readFileSync(join(library, '鏈鋸人', '鏈鋸人 - 卷 02.epub'), 'utf8')).toBe('two');
+  expect(await storage.move('/鏈鋸人/nope.epub', '/鏈鋸人/x.epub').catch(error => error)).toMatchObject({ code: 'not_found' });
+  // A change of case only, whether or not the file system tells the two names apart.
+  await storage.move('/鏈鋸人/鏈鋸人 - 卷 02.epub', '/鏈鋸人/鏈鋸人 - 卷 02.EPUB');
+  expect(readdirSync(join(library, '鏈鋸人'))).toContain('鏈鋸人 - 卷 02.EPUB');
+  expect(readdirSync(join(library, '鏈鋸人'))).not.toContain('鏈鋸人 - 卷 02.epub');
+});
+
+it('falls back to a checked rename where hard links are refused', async () => {
+  mkdirSync(join(root, 'a'));
+  writeFileSync(join(root, 'a', 'old.epub'), 'x');
+  writeFileSync(join(root, 'a', 'taken.epub'), 'y');
+  const link = spyOn(fs, 'link').mockRejectedValue(Object.assign(new Error('no links'), { code: 'EPERM' }));
+  try {
+    const storage = createLocalTarget({ libraryRoot: root, path: '/' });
+    expect(await storage.move('/a/old.epub', '/a/taken.epub').catch(error => error)).toMatchObject({ code: 'conflict' });
+    await storage.move('/a/old.epub', '/a/new.epub');
+    expect(readdirSync(join(root, 'a')).sort()).toEqual(['new.epub', 'taken.epub']);
+  } finally { link.mockRestore(); }
+});
+
+it('renames a symlink never through to the file it points at', async () => {
+  mkdirSync(join(root, 'a'));
+  mkdirSync(join(root, 'b'));
+  writeFileSync(join(root, 'b', 'real.epub'), 'x');
+  symlinkSync(join(root, 'b', 'real.epub'), join(root, 'a', 'link.epub'));
+  const storage = createLocalTarget({ libraryRoot: root, path: '/' });
+  expect(await storage.move('/a/link.epub', '/a/卷 01.epub').catch(error => error)).toMatchObject({ code: 'invalid' });
+  expect(readdirSync(join(root, 'b'))).toEqual(['real.epub']);
+  expect(readdirSync(join(root, 'a'))).toEqual(['link.epub']);
+});

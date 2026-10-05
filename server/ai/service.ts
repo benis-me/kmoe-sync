@@ -1,6 +1,7 @@
 // AI settings (endpoint, sealed key, model, proxy, monthly token budget), usage accounting, and the prompts the library
-// features use: judging candidates, suggesting search words, tidying metadata. All model calls go through client().
-import type { AiSettings, AiSettingsPatch, AiTestResult, AiVerdict, MetadataText } from '@shared/model';
+// features use: judging candidates, suggesting search words, tidying metadata, reading file names. All model calls go
+// through client().
+import type { AiSettings, AiSettingsPatch, AiTestResult, AiVerdict, ContentType, MetadataText } from '@shared/model';
 import { now } from '../db';
 import { AppError } from '../http/errors';
 import { sameOrigin } from '../lib/crypto';
@@ -157,6 +158,29 @@ export class AiService {
 只输出 JSON：{"keywords": ["写法1", "写法2"]}`;
     const answer = await this.ask(system, describe(facts), signal, 300);
     return words(answer.keywords, 3, 60);
+  }
+
+  /**
+   * Which Kmoe item each book file holds, for files whose names did not say (整理文件名): file name (NFC) → item id and how
+   * sure. Files it cannot tell are left out.
+   */
+  async readFiles(comic: { title: string; authors: string[] }, files: string[], items: { id: string; name: string; type: ContentType }[], signal?: AbortSignal): Promise<Map<string, { item: string; confidence: number }>> {
+    const listed = files.slice(0, 60);
+    // Volumes and extras first: a long series has more chapter packs than fit.
+    const choices = [...items.filter(item => item.type !== 'serial'), ...items.filter(item => item.type === 'serial')].slice(0, 400);
+    const system = `你在整理 NAS 书库里漫画文件的名字。给出一部漫画文件夹里的文件名，和这部漫画在 Kmoe 上的章节列表（「卷」是单行本，「話」是连载的话，「番外」是番外），判断每个文件是列表里的哪一项。
+文件名里的卷号、话数可能没有补零，也可能写成 Vol.3、v03、第3卷、(3)、03 等，书名可能是别的译名。同一个数字的卷和话不是同一项。看不出来就填 0，不要猜。
+只输出 JSON：{"files": [{"file": 文件序号, "item": 章节序号（对不上为 0）, "confidence": 0 到 1 的小数}]}`;
+    const user = [`漫画：${comic.title}（作者：${comic.authors.join('、') || '未知'}）`, '', '文件：', ...listed.map((file, index) => `${index + 1}. ${file}`),
+      '', 'Kmoe 章节：', ...choices.map((item, index) => `${index + 1}. ${item.name}`)].join('\n');
+    const answer = await this.ask(system, user, signal, 200 + listed.length * 40);
+    const readings = new Map<string, { item: string; confidence: number }>();
+    for (const entry of Array.isArray(answer.files) ? answer.files as Record<string, unknown>[] : []) {
+      const file = Number(entry?.file), item = Number(entry?.item);
+      if (!Number.isInteger(file) || !Number.isInteger(item) || file < 1 || file > listed.length || item < 1 || item > choices.length) continue;
+      readings.set(listed[file - 1]!.normalize('NFC'), { item: choices[item - 1]!.id, confidence: Math.min(1, Math.max(0, Number(entry.confidence) || 0)) });
+    }
+    return readings;
   }
 
   /** A tidied summary and tags for Komga (simplified Chinese, no promotion, genres from a common vocabulary). */

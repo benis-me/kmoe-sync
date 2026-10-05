@@ -25,6 +25,7 @@ import { ComicService } from './services/comics';
 import { KmoeService } from './services/kmoe';
 import { JobRunner } from './services/jobs';
 import { LibraryService } from './services/library';
+import { RenameService } from './services/rename';
 import { MetadataService } from './metadata/service';
 import { SettingsStore } from './services/settings';
 import { SourceService } from './services/sources';
@@ -72,6 +73,7 @@ function createCore(config: Config, options: AppOptions) {
   const library = new LibraryService({ db, hub, comics, targets, kmoe, settings, jobs, metadata, subscriptions, activity, pace: options.bulkPaceMs });
   comics.hooks = { folder: (comicId, targetId) => library.comicFolder(comicId, targetId), metadata: id => metadata.forFolders([id]).get(id) ?? null };
   library.backfill();
+  const rename = new RenameService({ db, comics, targets, library, metadata, jobs, activity, ai });
   const worker = new Worker({ db, tasks, comics, targets, kmoe, settings, activity, library, tmpDir: join(config.dataDir, 'tmp') });
   const sources = new SourceService(db, hub, activity, net);
   const auth = new AdminAuth(db, config.secureCookies);
@@ -79,7 +81,7 @@ function createCore(config: Config, options: AppOptions) {
   let statusTimer: ReturnType<typeof setTimeout> | undefined;
   const startedAt = now();
   const app = {
-    config, db, hub, settings, activity, kmoe, targets, comics, tasks, jobs, metadata, library, worker, subscriptions, sources, auth, net, ai,
+    config, db, hub, settings, activity, kmoe, targets, comics, tasks, jobs, metadata, library, rename, worker, subscriptions, sources, auth, net, ai,
 
     status(): Status {
       const reason = settings.pause().reason;

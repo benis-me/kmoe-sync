@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ChevronDown, ChevronRight, FolderInput, HardDrive, LoaderCircle, Settings2, Undo2 } from 'lucide-react';
 import type { Format, Line, Target } from '@shared/model';
-import { joinPath, renderRule } from '@shared/naming';
+import { joinPath, kmoeFilename, renderRule } from '@shared/naming';
 import { FORMAT_LABELS, LINE_LABELS, middleTruncate } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 /** The folder a chapter of this comic lands in, from the target's naming rule. */
 export function resolveDirectory(target: Target, libraryRoot: string, comic: { title: string; authors: string[] }, sample: string, format: Format) {
   try {
-    const file = joinPath(target.path, renderRule(target.rule, { title: comic.title, filename: `[Kmoe][${comic.title}]${sample.replace(/\s/g, '')}`, bookname: sample, author: comic.authors, ext: format }));
+    const file = joinPath(target.path, renderRule(target.rule, { title: comic.title, filename: kmoeFilename(comic.title, sample), bookname: sample, author: comic.authors, ext: format }));
     const directory = file.slice(0, file.lastIndexOf('/') + 1);
     return target.kind === 'local' ? joinPath(libraryRoot, directory) + '/' : directory;
   } catch {

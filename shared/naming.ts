@@ -88,8 +88,17 @@ export function renderRule(rule: string, context: RuleContext): string {
   return path;
 }
 
+/** Kmoe's own name for a download ({filename}), "[Kmoe][渣女沒渣報]卷01": what the rule gets before the real one is known. */
+export const kmoeFilename = (title: string, bookname: string) => `[Kmoe][${title}]${bookname.replace(/\s+/g, '')}`;
+
+/** Comparable form of a chapter label or file name: width, case, spaces, 話/话, 巻/卷 and dashes unified. */
+export const canonical = (text: string) => text.normalize('NFKC').toLowerCase().replace(/\s/g, '')
+  .replace(/[話话]/g, '话').replace(/[巻卷]/g, '卷').replace(/[‐‑–—~～]/g, '-');
+/** canonical() without leading zeros: "卷 01" and "卷1" are one chapter, "卷 010" is not. */
+export const chapterKey = (text: string) => canonical(text).replace(/\d+/g, value => value.replace(/^0+(?=\d)/, ''));
+
 /** Example used by rule previews: 《渣女沒渣報》卷 01. */
-export const RULE_SAMPLE: RuleContext = { title: '渣女沒渣報', filename: '[Kmoe][渣女沒渣報]卷01', bookname: '卷 01', author: ['岸川瑞樹'], ext: 'epub' };
+export const RULE_SAMPLE: RuleContext = { title: '渣女沒渣報', filename: kmoeFilename('渣女沒渣報', '卷 01'), bookname: '卷 01', author: ['岸川瑞樹'], ext: 'epub' };
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';

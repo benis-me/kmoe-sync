@@ -34,6 +34,8 @@ export interface StorageTarget {
    * Verifies the stored size before resolving. The source file is consumed (moved) for local targets on the same device.
    */
   put(path: string, source: StoredFile, options: { signal: AbortSignal; onProgress?: (sent: number, total: number) => void }): Promise<'stored' | 'exists'>;
+  /** Renames the file at `from` to `to` (整理文件名), never replacing anything: StorageError('conflict') when `to` exists. */
+  move(from: string, to: string, signal?: AbortSignal): Promise<void>;
   /** Settings "测试连接": reachability, credentials and write permission where cheap to check. */
   test(signal?: AbortSignal): Promise<{ ok: boolean; message: string }>;
 }

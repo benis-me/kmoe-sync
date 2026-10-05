@@ -16,7 +16,7 @@ const id = (value: string | undefined) => {
 };
 
 export function createHandlers(app: App): Handlers {
-  const { auth, kmoe, comics, tasks, worker, subscriptions, targets, settings, sources, activity, config, library, metadata, ai } = app;
+  const { auth, kmoe, comics, tasks, worker, subscriptions, targets, settings, sources, activity, config, library, rename, metadata, ai } = app;
   const detailOf = (key: string, targetId?: number) => comics.detail(key, targetId === undefined ? {} : { targetId }, targets.defaultId());
   const authState = (session: { csrf: string } | null) => ({ setupRequired: !auth.isSetUp(), authenticated: Boolean(session), csrf: session?.csrf ?? null });
   const queueState = () => app.status().queue;
@@ -175,6 +175,9 @@ export function createHandlers(app: App): Handlers {
     'POST /api/library/sync-komga': ({ body }) => { targets.get(body.targetId); return metadata.startSyncJob(body.targetId, body.all); },
     'POST /api/library/follow': ({ body }) => library.follow(body.targetId),
     'POST /api/library/cancel': () => app.jobs.cancel(),
+    'POST /api/library/rename/preview': ({ body }) => rename.preview(body.targetId, body.folderIds),
+    'POST /api/library/rename/ai': ({ body }) => rename.readWithAi(body.folderId),
+    'POST /api/library/rename': ({ body }) => rename.start(body.targetId, body.renames),
     'POST /api/library/accept-suggested': ({ body }) => library.acceptSuggested(body.targetId, body.minScore),
     'POST /api/library/folders/:id/kmoe': ({ params, body }) => library.linkFolder(id(params.id), body.comic),
     'POST /api/library/folders/:id/ignore': ({ params }) => library.ignore(id(params.id)),

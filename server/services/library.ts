@@ -1,5 +1,7 @@
 // Series folders on disk ("library folders"): scan a storage target, match folders to Kmoe comics, map comics to
-// existing folders, and keep folder rows in step with downloads. One folder = one Komga series. Files are never moved.
+// existing folders, and keep folder rows in step with downloads. One folder = one Komga series. Files are never moved
+// (整理文件名 renames them in place: services/rename.ts).
+import { BOOK_FILE } from '@shared/books';
 import type { AiVerdict, ComicFolder, ContentType, Format, KmoeCandidate, KmoeLinkState, LibraryCheck, LibraryCounts, LibraryFolder, LibraryJob, LibraryOverview } from '@shared/model';
 import { joinPath, normalizePath, renderRule } from '@shared/naming';
 import { AI_CONFIDENT, type AiService, type FolderFacts } from '../ai/service';
@@ -27,7 +29,6 @@ export interface FolderRow {
   kmoe_error: string | null; linked_by: string | null; kmoe_ai: string | null; created_at: string; updated_at: string;
 }
 
-const BOOK_FILE = /\.(epub|kepub|mobi|azw3?|pdf|cbz|cbr|cb7|zip|rar|7z)$/i;
 const MAX_DEPTH = 3;
 /**
  * Spacing between Kmoe page views in bulk jobs (imports, subscription batches). Kmoe's robots.txt asks for 10 s and it
@@ -223,6 +224,15 @@ export class LibraryService {
     }
     this.deps.metadata.markDirty(row.id);
     this.deps.hub.emit({ type: 'folders', targetId });
+  }
+
+  /** Reads a folder again after its files were renamed in place: count, format, sample and the title they are named after. */
+  async refreshFolder(id: number) {
+    const row = this.row(id);
+    const entries = await this.deps.targets.storage(row.target_id).list(row.path, { signal: AbortSignal.timeout(20_000) });
+    const books = entries.filter(entry => !entry.directory && BOOK_FILE.test(entry.name)).map(entry => entry.name);
+    this.deps.db.run('UPDATE library_folders SET books = ?, format = ?, sample = ?, hint = ? WHERE id = ?', [books.length, dominantFormat(books), books[0] ?? null, titleHint(books), id]);
+    this.touched(row);
   }
 
   /** Comics downloaded before folders were tracked: link each to the folder most of its files are in (idempotent, runs at start). */

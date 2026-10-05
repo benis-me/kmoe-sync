@@ -5,7 +5,7 @@ import { z } from 'zod';
 import {
   About, Activity, AiPolishItem, AiSettings, AiSettingsPatch, AiTestResult, AuthState, BangumiArchiveStatus, BangumiSubject, Channel, ComicDetail, DirEntry, DownloadRequest, DownloadResult, Format, KmoeAccount, KomgaDraft,
   KomgaTestResult, LibraryCheck, LibraryFolder, LibraryJob, LibraryOverview, Line, MetadataSettings, MetadataSettingsPatch, NetworkCheck, PolicyImpact,
-  QueueState, SearchResult, Settings, SettingsPatch, ShelfEntry, Source, SourceInput, SourceItem, Status, Subscription, SubscriptionInput,
+  QueueState, Rename, RenameFolder, RenamePreview, SearchResult, Settings, SettingsPatch, ShelfEntry, Source, SourceInput, SourceItem, Status, Subscription, SubscriptionInput,
   Target, TargetInput, TaskList, TaskStatus, TestResult,
 } from './model';
 
@@ -126,6 +126,12 @@ export const endpoints = {
   'GET /api/library/ai-polish': { query: z.object({ targetId: z.coerce.number().int() }), res: z.array(AiPolishItem) },
   /** Use (accept) or drop the AI version of these folders; accepted ones are written to Komga at the next sync. */
   'POST /api/library/ai-polish/decide': { body: z.object({ folderIds: z.array(z.number().int()).min(1).max(5000), accept: z.boolean() }), res: z.object({ updated: z.number() }) },
+  /** 整理文件名: what renaming the book files of linked folders to the naming rule would change. Reads the folders, changes nothing. */
+  'POST /api/library/rename/preview': { body: z.object({ targetId: z.number().int(), folderIds: z.array(z.number().int()).max(5000).optional() }), res: RenamePreview },
+  /** The AI reads the files of a folder whose names did not say which item they are; returns the folder planned with that. */
+  'POST /api/library/rename/ai': { body: z.object({ folderId: z.number().int() }), res: RenameFolder },
+  /** Renames the chosen files as a library job: each is checked again first, and nothing is ever overwritten. */
+  'POST /api/library/rename': { body: z.object({ targetId: z.number().int(), renames: z.array(Rename).min(1).max(20000) }), res: LibraryJob },
   /** Link every suggested folder whose best Kmoe candidate scores at least minScore. */
   'POST /api/library/accept-suggested': { body: z.object({ targetId: z.number().int(), minScore: z.number().min(0).max(1).default(0.9) }), res: z.object({ linked: z.number() }) },
   /** Link a folder to a Kmoe comic (a candidate, a search result or a pasted link/key); fetches the comic and checks the folder. */

@@ -1,7 +1,7 @@
 // Library check: which chapters already exist in a storage target under its naming rule. A port of the browser extension's
 // lib/library.ts (same matching, limits and result), generalised from WebDAV to any StorageTarget.
 import type { DirEntry, Format, LibraryCheck } from '@shared/model';
-import { joinPath, normalizePath, renderRule, safeSegment, validateRule } from '@shared/naming';
+import { canonical, chapterKey, joinPath, normalizePath, renderRule, safeSegment, validateRule } from '@shared/naming';
 import { StorageError, type StorageTarget } from './types';
 
 export interface LibraryRequest {
@@ -25,9 +25,6 @@ type LibraryChapter = LibraryCheck['chapters'][number];
 export type LibraryResult = Pick<LibraryCheck, 'directory' | 'directoryExists' | 'chapters' | 'unmatched'>;
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const canonical = (text: string) => text.normalize('NFKC').toLowerCase().replace(/\s/g, '')
-  .replace(/[話话]/g, '话').replace(/[巻卷]/g, '卷').replace(/[‐‑–—~～]/g, '-');
-const chapterKey = (text: string) => canonical(text).replace(/\d+/g, value => value.replace(/^0+(?=\d)/, ''));
 
 // Compare the whole chapter label: volume 01 is not volume 010, nor a chapter range.
 function sourceMatches(stem: string, request: LibraryRequest, label: string, titleDirectory: boolean): boolean {

@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
+import { bookNumber, itemNumber } from '@shared/books';
 import type { MetadataOptions } from '@shared/model';
 import { SlidingWindow, subjectIdOf, traditionalEdition, type BgmPerson, type BgmRelated, type BgmSubject } from '../../server/metadata/bangumi';
 import { below, komgaUrl, plainPath } from '../../server/metadata/komga';
 import { linkedSubject } from '../../server/metadata/service';
-import { bookAuthors, bookPatch, changes, isbn13, isoDate, itemNumber, languageOf, seriesPatch, volumeMap } from '../../server/metadata/sync';
-import { bookNumber, fold, isVolumeName, mainTitle, titleParts, titleSimilarity, volumeBase } from '../../server/metadata/text';
+import { bookAuthors, bookPatch, changes, isbn13, isoDate, languageOf, seriesPatch, volumeMap } from '../../server/metadata/sync';
+import { fold, isVolumeName, mainTitle, titleParts, titleSimilarity, volumeBase } from '../../server/metadata/text';
 import { fakeBangumi } from './fakes';
 
 const fx = fakeBangumi().data;
