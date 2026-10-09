@@ -2,6 +2,20 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.4] - 2026-10-09
+
+### 变更
+
+- 界面更跟手：导航、菜单、列表行的悬停高亮即时出现，不再慢慢渐变；按钮、章节、封面按下时会轻轻一沉。
+- 横向放不下的筛选（以及手机上的设置分区）在还能滚动的一端渐隐，看得出后面还有。
+- 移除的下载任务和书单条目会收起再消失，下面的行跟着补位，不再跳动；AI 助手从右下角的按钮处展开，关闭时更快地淡出。
+- 复制、深浅色、宽屏、显示密码的图标切换更顺。
+- 追更和书单的开关点下立刻切换，保存失败会自动恢复并说明原因；看过的封面直接显示，不再每次都淡入一遍。
+
+### 修复
+
+- 1280px 宽的屏幕上，书架的「有失败」筛选被搜索框遮住一截。
+
 ## [0.3.3] - 2026-10-06
 
 ### 变更
@@ -151,6 +165,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.3.4]: https://github.com/benis-me/kmoe-sync/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/benis-me/kmoe-sync/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/benis-me/kmoe-sync/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/benis-me/kmoe-sync/compare/v0.3.0...v0.3.1
