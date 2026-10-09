@@ -4,8 +4,9 @@ import * as React from "react"
 import { cn } from "cn"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
 
+// The first tooltip waits long enough not to pop up while the pointer only passes by; its neighbours then open at once.
 function TooltipProvider({
-  delayDuration = 300,
+  delayDuration = 500,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (

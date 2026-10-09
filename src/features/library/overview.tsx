@@ -34,7 +34,7 @@ function Picks({ stage, values, counts, filters, onPick }: { stage: Stage; value
     return <Fragment key={value}>
       {i > 0 && <span aria-hidden> · </span>}
       <button type="button" aria-pressed={on} aria-label={`${STAGES[stage].label} ${option.label} ${counts[value]}`} onClick={() => onPick(stage, value)}
-        className={cn('relative -mx-1 rounded-sm px-1 whitespace-nowrap underline decoration-current/30 underline-offset-[3px] outline-none transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-1 hover:decoration-current focus-visible:ring-2 focus-visible:ring-ring',
+        className={cn('relative -mx-1 rounded-sm px-1 whitespace-nowrap underline decoration-current/30 underline-offset-[3px] outline-none after:absolute after:inset-x-0 after:-inset-y-1 hover:decoration-current focus-visible:ring-2 focus-visible:ring-ring',
           { warning: 'text-warning', destructive: 'text-destructive' }[option.tone as string], on && 'bg-seal-soft text-seal no-underline')}>
         {option.label} {counts[value]}
       </button>

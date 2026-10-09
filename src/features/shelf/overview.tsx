@@ -16,7 +16,7 @@ type Tone = 'muted' | 'seal' | 'warning' | 'destructive';
 const TONES: Record<Tone, string> = { muted: 'bg-muted text-muted-foreground', seal: 'bg-seal-soft text-seal', warning: 'bg-warning-soft text-warning', destructive: 'bg-destructive/10 text-destructive' };
 // Each cell is a size container: from 11rem it adds a detail at the trailing edge, from 17rem an icon; phones keep name and value.
 const cell = '@container flex min-w-0 items-center gap-3.5 px-3.5 py-3 sm:px-5 sm:py-4';
-const link = 'outline-none transition-colors duration-150 hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset';
+const link = 'outline-none hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset';
 
 function Cell({ icon: Icon, tone = 'muted', spin, label, value, valueTone, detail, to }: {
   icon: LucideIcon; tone?: Tone; spin?: boolean; label: string; value: ReactNode; valueTone?: string; detail?: ReactNode; to?: boolean;

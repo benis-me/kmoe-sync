@@ -2,6 +2,7 @@ import { useState, type ComponentProps } from 'react';
 import { toast } from 'sonner';
 import { Check, Copy, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { IconSwap } from '@/components/ui/icon-swap';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 
 /** Password field with a show/hide toggle. */
@@ -11,7 +12,7 @@ export function PasswordInput({ className, ...props }: Omit<ComponentProps<'inpu
     <InputGroupInput type={reveal ? 'text' : 'password'} spellCheck={false} autoCapitalize="none" {...props} />
     <InputGroupAddon align="inline-end">
       <InputGroupButton size="icon-xs" aria-label={reveal ? '隐藏密码' : '显示密码'} aria-pressed={reveal} onClick={() => setReveal(value => !value)}>
-        {reveal ? <EyeOff /> : <Eye />}
+        <IconSwap id={reveal ? 'hide' : 'show'}>{reveal ? <EyeOff /> : <Eye />}</IconSwap>
       </InputGroupButton>
     </InputGroupAddon>
   </InputGroup>;
@@ -39,6 +40,6 @@ export function CopyButton({ text, label, size = 'icon-sm' }: { text: string; la
   const [done, setDone] = useState(false);
   return <Button type="button" variant="ghost" size={size} className="shrink-0 text-muted-foreground" aria-label={done ? '已复制' : label} title={done ? '已复制' : label}
     onClick={() => copyText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }, error => void toast.error((error as Error).message))}>
-    {done ? <Check className="animate-pop text-success" /> : <Copy />}
+    <IconSwap id={done ? 'done' : 'copy'}>{done ? <Check className="text-success" /> : <Copy />}</IconSwap>
   </Button>;
 }

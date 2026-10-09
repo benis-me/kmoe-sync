@@ -78,8 +78,9 @@ function ChannelCard({ channel, saved, all, onDone }: { channel: Channel; saved:
           <span className="truncate font-medium">{draft.name || KINDS[draft.kind].label}</span>
           <span className="text-xs text-muted-foreground">{KINDS[draft.kind].label}{!saved && ' · 尚未保存'}</span>
         </div>
-        <Switch aria-label={`启用 ${draft.name}`} checked={saved ? channel.enabled : draft.enabled} disabled={patch.isPending}
-          onCheckedChange={enabled => saved ? patch.mutate({ notifications: list({ ...channel, enabled }) }) : set('enabled', enabled)} />
+        {/* The settings update at once (and revert if saving fails), so the switch is not greyed out while it saves. */}
+        <Switch aria-label={`启用 ${draft.name}`} checked={saved ? channel.enabled : draft.enabled}
+          onCheckedChange={enabled => { if (!saved) set('enabled', enabled); else if (!patch.isPending) patch.mutate({ notifications: list({ ...channel, enabled }) }); }} />
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         {field('name', '名称', {})}

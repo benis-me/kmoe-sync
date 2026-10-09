@@ -47,8 +47,8 @@ export function QuotaBar({ kmoe, className }: { kmoe: KmoeAccount; className?: s
   const total = (kmoe.free?.totalMB ?? 0) + (kmoe.vipQuota?.totalMB ?? 0);
   const remaining = kmoe.remainingMB ?? 0;
   return <span aria-hidden className={cn('relative block h-1 overflow-hidden rounded-full bg-foreground/8', className)}>
-    <span className="absolute inset-y-0 left-0 rounded-full bg-foreground/70 transition-[width] duration-700 ease-out-strong"
-      style={{ width: `${total > 0 ? Math.min(100, remaining / total * 100) : 0}%` }} />
+    <span className="block h-full rounded-full bg-foreground/70 transition-transform duration-700 ease-out-strong"
+      style={{ transform: `translateX(${total > 0 ? Math.min(100, remaining / total * 100) - 100 : -100}%)` }} />
   </span>;
 }
 

@@ -170,7 +170,7 @@ export function BangumiSourceCard({ bangumi }: { bangumi: MetadataSettings['bang
     <div className="flex flex-col gap-4 p-5 sm:p-6">
       <h3 id="bangumi-source-title" className="text-[15px] font-semibold tracking-tight">Bangumi 数据来源</h3>
       <div className="flex flex-col gap-2">
-        <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar">
+        <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar edge-fade-x">
           <ToggleGroup type="single" variant="segmented" aria-label="数据来源" value={draft.source} onValueChange={value => value && set('source', value as BangumiSource)}>
             {(Object.keys(SOURCES) as BangumiSource[]).map(source => <ToggleGroupItem key={source} value={source} className="px-3">{SOURCES[source].label}</ToggleGroupItem>)}
           </ToggleGroup>

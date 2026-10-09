@@ -51,7 +51,7 @@ function KmoeCell({ folder, pending, busy, handlers }: { folder: LibraryFolder; 
   if (kmoe.state === 'matched' && kmoe.comic) {
     const { comic } = kmoe;
     return <Link to="/comics/$key" params={{ key: comic.key }} search={{ targetId: folder.targetId }}
-      className="group/comic -m-1 flex min-w-0 items-center gap-2.5 rounded-lg p-1 outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring">
+      className="group/comic -m-1 flex min-w-0 items-center gap-2.5 rounded-lg p-1 outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring">
       <Cover src={comic.cover} title={comic.title} className={thumb} />
       <Lines title={<><span className="sr-only">已关联 </span>{comic.title}</>} sub={error || [comic.authors.join(' / '), comic.latest && `最新 ${comic.latest}`].filter(Boolean).join(' · ') || '已关联'} />
     </Link>;

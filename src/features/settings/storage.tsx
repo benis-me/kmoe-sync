@@ -38,7 +38,7 @@ export function StorageSection() {
     <ul className="flex flex-col gap-3">
       {targets.data.map(target => <li key={target.id}>
         <Collapsible open={open === target.id} onOpenChange={next => setOpen(next ? target.id : null)} className="overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
-          <CollapsibleTrigger className="group/row flex w-full items-center gap-3.5 px-5 py-4 text-left outline-none transition-colors duration-150 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+          <CollapsibleTrigger className="group/row flex w-full items-center gap-3.5 px-5 py-4 text-left outline-none hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
               {target.kind === 'local' ? <HardDrive className="size-4" /> : <Server className="size-4" />}
             </span>

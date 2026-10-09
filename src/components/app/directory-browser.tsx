@@ -23,7 +23,7 @@ export type BrowseTarget = {
   opener?: HTMLElement | null; title?: string; description?: string; action?: string;
 };
 
-const row = 'flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm outline-none transition-colors duration-150 hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring';
+const row = 'flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring';
 
 /** Mount one per opened target (keyed), so nothing leaks between targets. */
 export function DirectoryBrowser({ target, onClose }: { target: BrowseTarget; onClose: () => void }) {
@@ -95,7 +95,7 @@ export function DirectoryBrowser({ target, onClose }: { target: BrowseTarget; on
               {i > 0 && <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60" />}
               {i === crumbs.length - 1
                 ? <span aria-current="page" className="truncate px-1.5 font-medium">{name}</span>
-                : <button type="button" className="truncate rounded-md px-1.5 py-0.5 text-muted-foreground outline-none transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" onClick={() => void browse(crumb)}>{name}</button>}
+                : <button type="button" className="truncate rounded-md px-1.5 py-0.5 text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" onClick={() => void browse(crumb)}>{name}</button>}
             </li>;
           })}
         </ol>

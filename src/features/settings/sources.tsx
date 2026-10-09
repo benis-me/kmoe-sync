@@ -43,7 +43,8 @@ function SourceCard({ source, onDone }: { source: Source | null; onDone?: () => 
   });
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => request('PATCH /api/sources/:id', { params: { id: source!.id }, body: { enabled } }),
-    onSuccess: () => void refresh(),
+    // Pending until the list has the new state: the switch shows what is being saved until then.
+    onSuccess: () => refresh(),
   });
   const sync = useMutation({
     mutationFn: () => request('POST /api/sources/:id/sync', { params: { id: source!.id } }),
@@ -75,7 +76,8 @@ function SourceCard({ source, onDone }: { source: Source | null; onDone?: () => 
           </span> : <span className="text-xs text-muted-foreground">尚未保存</span>}
           {source?.error && <span role="alert" className="text-xs text-destructive">{source.error}</span>}
         </div>
-        {source && <Switch aria-label={`同步 ${source.name}`} checked={source.enabled} disabled={toggle.isPending} onCheckedChange={enabled => toggle.mutate(enabled)} />}
+        {source && <Switch aria-label={`同步 ${source.name}`} checked={toggle.isPending ? toggle.variables : source.enabled}
+          onCheckedChange={enabled => { if (!toggle.isPending) toggle.mutate(enabled); }} />}
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field className="gap-2">

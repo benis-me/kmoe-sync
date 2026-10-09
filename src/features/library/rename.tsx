@@ -24,7 +24,7 @@ const kept = (file: RenameFile, picks: Picks | undefined) => !!file.to && (picks
 
 const FileRow = ({ file, checked, onChange }: { file: RenameFile; checked: boolean; onChange: (keep: boolean) => void }) => file.to
   ? <li>
-    <label className="flex min-w-0 cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-accent/60">
+    <label className="flex min-w-0 cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-accent/60">
       <Checkbox aria-label={`把「${file.name}」改成「${file.to}」`} checked={checked} onCheckedChange={value => onChange(value === true)} className="mt-0.5" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-xs text-muted-foreground line-through decoration-muted-foreground/40" title={file.name}>{file.name}</span>

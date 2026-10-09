@@ -87,10 +87,12 @@ const Tile = memo(function Tile({ item, info, task, format, selected, tabbable, 
     style={stagger ? { '--i': index } as CSSProperties : undefined}
     className={cn(
       'group/tile @container relative flex min-w-0 scroll-my-28 flex-col gap-1 overflow-hidden rounded-xl border bg-card px-3 py-2.5 shadow-soft select-none',
-      'transition-[border-color,background-color,box-shadow] duration-150 ease-out-strong',
+      // Picking tiles is the most frequent thing on this page: the colours change at once, and a press is felt (a tile is
+      // wider than a button, so it gives less).
+      'transition-[scale] duration-150 ease-out-strong',
       'has-[[role=checkbox]:focus-visible]:ring-2 has-[[role=checkbox]:focus-visible]:ring-ring',
       'data-selected:border-seal/50 data-selected:bg-seal-soft/60 data-selected:ring-1 data-selected:ring-seal/25',
-      selectable ? 'cursor-pointer hover:border-input data-selected:hover:border-seal/70' : 'border-border/70 bg-card/55 shadow-none',
+      selectable ? 'cursor-pointer hover:border-input active:scale-[0.98] active:duration-75 data-selected:hover:border-seal/70' : 'border-border/70 bg-card/55 shadow-none',
       stagger && 'stagger',
     )}
     onClick={e => { if (selectable) onToggle(item.id, e.shiftKey); }}
@@ -117,7 +119,7 @@ const Tile = memo(function Tile({ item, info, task, format, selected, tabbable, 
       <StateTag id={`${id}-state`} state={state} info={info} task={task} open={tip} onOpenChange={setTip} />
     </div>
     {progress !== null && <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-seal/15">
-      <span className="block h-full bg-seal transition-[width] duration-1000 ease-linear" style={{ width: `${progress * 100}%` }} />
+      <span className="block h-full origin-left bg-seal transition-transform duration-1000 ease-linear" style={{ transform: `scaleX(${progress})` }} />
     </span>}
   </div>;
 });
@@ -249,7 +251,7 @@ export function Chapters({ comicKey, items, states, format, running, library, ch
         <span className="ml-auto hidden text-xs text-muted-foreground pointer-fine:2xl:inline">
           <kbd className="rounded border bg-card px-1 font-sans text-[11px]">Shift</kbd> 可连选
         </span>
-        <div className="-m-1 flex items-center gap-1 overflow-x-auto p-1 no-scrollbar max-sm:w-full">
+        <div className="-m-1 flex items-center gap-1 overflow-x-auto p-1 no-scrollbar edge-fade-x max-sm:w-full">
           {/* aria-disabled once done, so the focused button keeps keyboard focus instead of dropping it. */}
           <Button variant="ghost" size="sm" disabled={!selectable.length} aria-disabled={allSelected} onClick={() => { if (!allSelected) selectAll(); }}>
             <CheckCheck data-icon="inline-start" />全选可下载<span className="text-muted-foreground tabular-nums">{selectable.length}</span>
@@ -292,7 +294,7 @@ export function Chapters({ comicKey, items, states, format, running, library, ch
                 onCheckedChange={() => setSelection(old => toggleAll(old, ids))}
               />
               <CollapsibleTrigger className="group/group flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="truncate text-[13px] font-semibold tracking-tight">{group.label}</span>
+                <span className="truncate text-[13px] font-semibold">{group.label}</span>
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{group.items.length} 项 · {formatMB(size)}</span>
                 <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums max-sm:hidden">已下载 {done}/{group.items.length}</span>
                 <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground transition-transform duration-250 ease-out-strong group-data-[state=closed]/group:-rotate-90 max-sm:ml-auto" />

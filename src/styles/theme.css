@@ -139,7 +139,9 @@
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
 
-  /* Motion: strong ease-out for entrances, ease-in-out for on-screen movement. */
+  /* Motion: strong ease-out for entrances, ease-in-out for on-screen movement. A transition with no easing of its own
+     gets the same ease-out, so the app moves with one curve instead of the browser's milder default. */
+  --default-transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
@@ -178,11 +180,16 @@
   animation: var(--animate-rise);
   animation-delay: calc(min(var(--i, 0), 14) * 16ms);
 }
+/* A row that scrolls sideways (filters, the settings strip on phones) fades the edge that still has more to scroll, so a
+   cut-off label reads as "more this way" rather than the end: shadcn's scroll-fade-x, driven by the scroll position.
+   Only where scroll timelines exist: its fallback fades both edges for good, which would fade a row that fits. */
+@utility edge-fade-x { @apply supports-[animation-timeline:scroll()]:scroll-fade-x; }
 
 @layer base {
   * { @apply border-border outline-ring; }
   html, body, #root { min-height: 100%; }
-  html { -webkit-tap-highlight-color: transparent; }
+  /* The canvas behind the page (overscroll, the strip under a short page) is paper too, not the browser's white. */
+  html { @apply bg-background; -webkit-tap-highlight-color: transparent; }
   body { @apply bg-background text-foreground font-sans antialiased; margin: 0; text-rendering: optimizeLegibility; }
   /* Headings break into even lines; paragraphs never leave one character alone on the last line. */
   h1, h2, h3 { text-wrap: balance; }

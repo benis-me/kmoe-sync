@@ -45,7 +45,7 @@ export function ComicHeader({ detail, kmoeUrl, refreshing, onRefresh, titleRef }
     {comic.description && <div className="relative col-span-2 max-w-2xl text-sm leading-relaxed text-foreground/80 md:col-span-1 md:col-start-2">
       <p className={cn(!expanded && 'line-clamp-2 md:line-clamp-3')}>{comic.description}</p>
       {long && <button type="button" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}
-        className="mt-1 rounded-sm text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{expanded ? '收起' : '展开'}</button>}
+        className="relative mt-1 rounded-sm text-xs font-medium text-muted-foreground outline-none after:absolute after:-inset-x-2 after:-inset-y-1.5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{expanded ? '收起' : '展开'}</button>}
     </div>}
     <div className="relative col-span-2 flex flex-wrap items-center gap-2 self-end md:col-span-1 md:col-start-2">
       {/* Below xl the subscription card comes after the whole chapter grid. */}

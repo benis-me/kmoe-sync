@@ -63,8 +63,10 @@ export const TaskRow = memo(function TaskRow({ task }: { task: Task }) {
   const name = `${task.comicTitle} ${task.itemName}`;
   const meta = [FORMAT_LABELS[task.format], task.targetName, ORIGINS[task.origin],
     task.finishedAt ? formatWhen(task.finishedAt) : task.startedAt ? `开始于 ${formatWhen(task.startedAt)}` : `加入于 ${formatWhen(task.createdAt)}`].join(' · ');
-  return <motion.li layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.15 } }}
-    className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3.5 px-4 py-3 sm:gap-x-4">
+  // Leaving, the row folds its height while it fades, so the rows below slide up into its place instead of jumping.
+  return <motion.li layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
+    className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3.5 overflow-hidden px-4 py-3 sm:gap-x-4">
     <Cover src={task.cover} title={task.comicTitle} className="w-9 rounded-md" />
     <div className="flex min-w-0 flex-col gap-0.5">
       <p className="-m-1 truncate p-1 text-sm font-medium">

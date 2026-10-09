@@ -33,7 +33,7 @@ export function Option({ name, checked, cover, title, meta, score, badge, onPick
   name: string; checked: boolean; cover: string | null; title: string; meta: string; score?: number; badge?: string; onPick: () => void; onChoose: () => void;
 }) {
   return <label onDoubleClick={onChoose}
-    className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors duration-150 hover:bg-accent has-checked:bg-seal-soft/70 has-checked:ring-1 has-checked:ring-seal/30 has-focus-visible:ring-2 has-focus-visible:ring-ring">
+    className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left hover:bg-accent has-checked:bg-seal-soft/70 has-checked:ring-1 has-checked:ring-seal/30 has-focus-visible:ring-2 has-focus-visible:ring-ring">
     <input type="radio" name={name} checked={checked} onChange={onPick} className="sr-only" />
     <Cover src={cover} title={title} className="w-9 rounded-md" />
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">

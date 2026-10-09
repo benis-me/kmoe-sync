@@ -49,7 +49,7 @@ export function DestinationBar({ targets, target, directory, mapped, format, lin
   const [open, setOpen] = useState(false);
   return <Collapsible open={open} onOpenChange={setOpen} className="overflow-hidden rounded-xl bg-muted/45 ring-1 ring-border">
     <CollapsibleTrigger asChild>
-      <button type="button" className="group/dest flex h-11 w-full min-w-0 items-center gap-2 px-4 text-left outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+      <button type="button" className="group/dest flex h-11 w-full min-w-0 items-center gap-2 px-4 text-left outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
         <span className="sr-only">保存位置：</span>
         <HardDrive aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         {target ? <>
@@ -59,7 +59,7 @@ export function DestinationBar({ targets, target, directory, mapped, format, lin
           {mapped && <Badge variant="secondary" className="max-md:hidden">已对应现有文件夹</Badge>}
           <span className="shrink-0 text-muted-foreground max-sm:hidden">· {FORMAT_LABELS[format]} · {LINE_LABELS[line]}</span>
         </> : <span className="text-muted-foreground">还没有存储位置</span>}
-        <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-xs font-medium text-muted-foreground transition-colors duration-150 group-hover/dest:text-foreground">
+        <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-xs font-medium text-muted-foreground group-hover/dest:text-foreground">
           {open ? '收起' : '更改'}
           <ChevronDown aria-hidden className="size-3.5 transition-transform duration-250 ease-out-strong group-data-[state=open]/dest:rotate-180" />
         </span>

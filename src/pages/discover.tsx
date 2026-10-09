@@ -17,7 +17,7 @@ import { EmptyState, ErrorState, Loading } from '@/components/app/feedback';
 import { FieldMessage } from '@/components/app/fields';
 import { Page, PageHeader } from '@/components/app/page';
 
-const tab = 'relative z-10 flex h-10 items-center px-1 text-sm font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:text-foreground';
+const tab = 'relative z-10 flex h-10 items-center px-1 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:text-foreground';
 
 export function DiscoverLayout() {
   const { pathname } = useLocation();
@@ -39,7 +39,7 @@ const looksLikeLink = (text: string) => /^https?:\/\//i.test(text) || /\/c\/\w+/
 
 function ResultCard({ comic, index }: { comic: ComicSummary; index: number }) {
   return <Link to="/comics/$key" params={{ key: comic.key }} style={{ '--i': index } as CSSProperties}
-    className="group/card stagger flex min-w-0 flex-col gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background">
+    className="group/card stagger flex min-w-0 flex-col gap-2.5 rounded-xl outline-none transition-[scale] duration-150 ease-out-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background active:scale-[0.98] active:duration-75">
     <div className="relative">
       <Cover src={comic.cover} title={comic.title} className="w-full rounded-xl transition-[translate,box-shadow] duration-200 ease-out-strong group-hover/card:-translate-y-0.5 group-hover/card:shadow-float" />
       {comic.tracked && <Badge variant="secondary" className="absolute top-2 left-2 bg-card/90 shadow-soft backdrop-blur-sm">已在书架</Badge>}
@@ -83,12 +83,13 @@ export function SearchPage() {
 
   return <>
     <form role="search" onSubmit={submit} className="flex max-w-2xl flex-col gap-2">
-      <InputGroup className="h-12 rounded-xl">
+      {/* Concentric corners: the button sits 8px in on every side, so the box is its 10px radius plus 8px. */}
+      <InputGroup className="h-12 rounded-2xl">
         <InputGroupAddon className="pl-4">{link ? <Link2 className="size-5" /> : <Search className="size-5" />}</InputGroupAddon>
         <InputGroupInput id="discover-search" type="search" autoFocus={!q} aria-label="搜索 Kmoe 或粘贴漫画链接" placeholder="书名、作者，或粘贴 Kmoe 漫画链接"
           className="text-base md:text-[15px]" value={text} onChange={e => { setText(e.target.value); setError(''); }}
           aria-invalid={!!error} aria-describedby={error ? 'discover-error' : link ? 'discover-hint' : undefined} />
-        <InputGroupAddon align="inline-end" className="pr-2">
+        <InputGroupAddon align="inline-end" className="pr-[7px] has-[>button]:mr-0">
           <InputGroupButton type="submit" variant="default" size="sm" className="h-8 rounded-lg px-3.5" aria-disabled={resolve.isPending}>
             {resolve.isPending ? <LoaderCircle className="animate-spin" /> : link ? <ArrowRight /> : null}{link ? '打开' : '搜索'}
           </InputGroupButton>

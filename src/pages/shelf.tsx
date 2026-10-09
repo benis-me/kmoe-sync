@@ -78,7 +78,7 @@ export function ShelfPage() {
     <div className={cn('grid grid-cols-1 items-start gap-x-10 gap-y-8', entries?.length !== 0 && 'xl:grid-cols-[minmax(0,1fr)_300px]')}>
       <section aria-label="漫画" className="flex min-w-0 flex-col gap-5">
         {!!entries?.length && <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar">
+          <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar edge-fade-x">
             <ToggleGroup type="single" variant="segmented" aria-label="筛选漫画" value={filter} onValueChange={value => value && setFilter(value as Filter)}>
               {FILTERS.map(item => {
                 const count = matched.filter(item.test).length;
@@ -88,7 +88,8 @@ export function ShelfPage() {
               })}
             </ToggleGroup>
           </div>
-          <InputGroup className="sm:w-60">
+          {/* The search gives way first (down to 10rem), so the filters fit beside it even with the activity column open. */}
+          <InputGroup className="sm:w-auto sm:min-w-40 sm:max-w-60 sm:flex-1">
             <InputGroupAddon><Search /></InputGroupAddon>
             <InputGroupInput ref={search} type="search" aria-label="在书架中搜索" placeholder="搜索书名或作者" value={q} onChange={e => setQ(e.target.value)}
               onKeyDown={e => { if (e.key === 'Escape' && q) { e.preventDefault(); setQ(''); } }} />

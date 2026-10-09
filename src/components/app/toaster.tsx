@@ -34,11 +34,11 @@ export function Toaster() {
         toast: 'group/toast flex w-full items-start gap-3 rounded-xl border bg-popover py-3 pr-10 pl-3.5 text-sm text-popover-foreground shadow-float',
         icon: 'mt-px shrink-0',
         content: 'flex min-w-0 flex-1 flex-col gap-0.5 py-px',
-        title: 'leading-snug font-medium break-words',
-        description: 'text-xs leading-relaxed text-muted-foreground break-words',
-        actionButton: 'mt-0.5 h-7 shrink-0 rounded-md border bg-card px-2.5 text-xs font-medium shadow-soft transition-colors duration-150 hover:bg-accent',
+        title: 'leading-snug font-medium text-balance break-words',
+        description: 'text-xs leading-relaxed text-pretty text-muted-foreground break-words',
+        actionButton: 'mt-0.5 h-7 shrink-0 rounded-md border bg-card px-2.5 text-xs font-medium shadow-soft transition-[scale] duration-150 hover:bg-accent active:scale-[0.96] active:duration-75',
         cancelButton: 'mt-0.5 h-7 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent',
-        closeButton: 'absolute top-2.5 right-2.5 grid size-6 place-items-center rounded-md text-muted-foreground outline-none transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+        closeButton: 'absolute top-2.5 right-2.5 grid size-6 place-items-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
       },
     }}
   />;

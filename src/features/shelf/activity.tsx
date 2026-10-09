@@ -34,7 +34,7 @@ function Entry({ activity, now }: { activity: Activity; now: number }) {
   </>;
   const row = 'flex gap-3 rounded-lg px-2 py-2';
   return activity.comicKey
-    ? <Link to="/comics/$key" params={{ key: activity.comicKey }} className={cn(row, 'outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring')}>{body}</Link>
+    ? <Link to="/comics/$key" params={{ key: activity.comicKey }} className={cn(row, 'outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring')}>{body}</Link>
     : <div className={row}>{body}</div>;
 }
 

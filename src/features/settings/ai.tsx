@@ -79,7 +79,7 @@ function AiForm({ ai, proxy }: { ai: AiSettings; proxy: string }) {
     <div className="flex flex-col gap-5 p-5 sm:p-6">
       <div className="flex flex-col gap-2">
         <h3 id="ai-title" className="text-[15px] font-semibold tracking-tight">AI 服务</h3>
-        <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar">
+        <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar edge-fade-x">
           <ToggleGroup type="single" variant="segmented" aria-label="服务商" value={draft.provider} onValueChange={value => value && choose(value as AiProvider)}>
             {(Object.keys(PRESETS) as AiProvider[]).map(provider => <ToggleGroupItem key={provider} value={provider} className="px-3">{PRESETS[provider].label}</ToggleGroupItem>)}
           </ToggleGroup>

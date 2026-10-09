@@ -5,6 +5,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEven
 import { flushSync } from 'react-dom';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { ArrowUp, Check, CircleSlash, LoaderCircle, RotateCcw, SquarePen, Sparkles, Square, TriangleAlert, X } from 'lucide-react';
 import { cn } from 'cn';
 import type { ChatEvent, ChatMessage } from '@shared/model';
@@ -107,6 +108,7 @@ function Panel({ onClose }: { onClose: () => void }) {
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const busy = live !== null;
+  const present = useIsPresent();
 
   const send = useCallback(async (base: ChatMessage[], decisions?: Record<string, boolean>) => {
     if (abort.current) return;
@@ -208,8 +210,12 @@ function Panel({ onClose }: { onClose: () => void }) {
   const reset = () => { abort.current?.abort(); setConversation(EMPTY); save(EMPTY); setPending(null); setError(null); setLive(null); input.current?.focus(); };
 
   const turns = turnsOf(conversation.messages);
-  return <aside role="dialog" aria-modal="false" aria-labelledby="assistant-title" onKeyDown={e => { if (e.key === 'Escape' && !e.nativeEvent.isComposing) close(); }}
-    className="fixed inset-0 z-50 flex animate-rise flex-col bg-background md:inset-auto md:top-4 md:right-4 md:bottom-4 md:w-[440px] md:overflow-hidden md:rounded-2xl md:bg-card md:shadow-panel md:ring-1 md:ring-border">
+  // In: rises on phones (it covers the screen); on wider screens it grows out of the corner the floating button sits in.
+  // Out: quicker and quieter than it came, so nothing keeps the user watching once they are done; inert while it fades,
+  // so the page under it already takes clicks and focus.
+  return <motion.aside role="dialog" aria-modal="false" aria-labelledby="assistant-title" inert={!present} onKeyDown={e => { if (e.key === 'Escape' && !e.nativeEvent.isComposing) close(); }}
+    exit={{ opacity: 0, filter: 'blur(2px)', transition: { duration: 0.12, ease: [0.4, 0, 1, 1] } }}
+    className="fixed inset-0 z-50 flex animate-rise flex-col bg-background md:inset-auto md:top-4 md:right-4 md:bottom-4 md:w-[440px] md:origin-bottom-right md:animate-pop md:overflow-hidden md:rounded-2xl md:bg-card md:shadow-panel md:ring-1 md:ring-border md:[--pop-scale:0.96]">
     <header className="flex items-center gap-2 border-b px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
       <Sparkles aria-hidden className="size-4 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -229,7 +235,7 @@ function Panel({ onClose }: { onClose: () => void }) {
         <p className="text-sm text-muted-foreground">可以问书库、订阅和下载的事，也可以让它帮你订阅、补齐缺的卷；会改动东西的操作都会先问你。</p>
         <ul className="flex flex-col gap-1.5">
           {suggestionsFor(page).map(text => <li key={text}><button type="button" onClick={() => question(text)}
-            className="w-full rounded-xl border px-3 py-2 text-left text-[13px] outline-none transition-colors duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">{text}</button></li>)}
+            className="w-full rounded-xl border px-3 py-2 text-left text-[13px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">{text}</button></li>)}
         </ul>
       </div> : turns.map((turn, index) => {
         const last = index === turns.length - 1, running = last && busy;
@@ -275,19 +281,21 @@ function Panel({ onClose }: { onClose: () => void }) {
       {busy ? <Button type="button" size="icon" variant="outline" aria-label="停止" onClick={() => abort.current?.abort()}><Square className="size-3.5" /></Button>
         : <Button type="submit" size="icon" aria-label="发送" aria-disabled={!draft.trim() || !ai?.ready}><ArrowUp /></Button>}
     </form>
-  </aside>;
+  </motion.aside>;
 }
 
 /** The floating button (bottom right, above the phone tab bar; not on full-screen pages) and the panel it opens. */
 export function Assistant({ hideButton = false }: { hideButton?: boolean }) {
   const { open, show, hide } = useAssistant();
   const { data: aiReady = false } = useQuery({ ...aiSettingsQuery, select: settings => settings.ready });
-  if (open) return <Panel onClose={hide} />;
-  // Without AI set up there is nothing to ask (the other 问 AI buttons check the same); the panel still opens from them.
-  if (hideButton || !aiReady) return null;
-  // A circle: 48px above the phone tab bar, 40px in the corner on wider screens, where it covers as little of the rows as it can.
-  return <Button data-assistant-button variant="outline" onClick={() => show()} aria-label="打开 AI 助手" title="AI 助手"
-    className="fixed right-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 size-12 rounded-full bg-card p-0 shadow-float md:right-6 md:bottom-6 md:size-10">
-    <Sparkles className="size-5 text-muted-foreground md:size-4" /><span className="sr-only">AI 助手</span>
-  </Button>;
+  return <>
+    {/* Kept while it leaves; the button is already back underneath it. */}
+    <AnimatePresence>{open && <Panel key="panel" onClose={hide} />}</AnimatePresence>
+    {/* Without AI set up there is nothing to ask (the other 问 AI buttons check the same); the panel still opens from them. */}
+    {/* A circle: 48px above the phone tab bar, 40px in the corner on wider screens, where it covers as little of the rows as it can. */}
+    {!open && !hideButton && aiReady && <Button data-assistant-button variant="outline" onClick={() => show()} aria-label="打开 AI 助手" title="AI 助手"
+      className="fixed right-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 size-12 rounded-full bg-card p-0 shadow-float md:right-6 md:bottom-6 md:size-10">
+      <Sparkles className="size-5 text-muted-foreground md:size-4" /><span className="sr-only">AI 助手</span>
+    </Button>}
+  </>;
 }

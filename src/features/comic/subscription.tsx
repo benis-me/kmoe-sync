@@ -64,7 +64,8 @@ export function SubscriptionCard({ detail, targets, settings, vip, remainingMB }
       if (!sub) toast.success(`已订阅《${detail.comic.title}》`, { description: impact?.queue ? `${impact.queue} 项缺失已加入下载队列` : '新章节发布后会自动下载。' });
       else if (body.enabled !== sub.enabled && JSON.stringify({ ...body, enabled: sub.enabled }) === savedKey) toast.success(body.enabled ? '已恢复追更' : '已暂停追更');
       else toast.success('已保存追更设置');
-      void refresh();
+      // Still pending until the page has the saved subscription, so the switch never flicks back in between.
+      return refresh();
     },
   });
   const check = useMutation({
@@ -94,7 +95,9 @@ export function SubscriptionCard({ detail, targets, settings, vip, remainingMB }
         </h2>
         {!sub && <p className="text-xs leading-relaxed text-muted-foreground">订阅后，新卷或新话发布时会自动下载。</p>}
       </div>
-      {sub && <Switch aria-label="追更开关" checked={sub.enabled} disabled={save.isPending} onCheckedChange={enabled => save.mutate({ ...saved, enabled })} />}
+      {/* Moves at once to what is being saved, and back on its own if saving fails (the error says why). */}
+      {sub && <Switch aria-label="追更开关" checked={save.isPending ? save.variables.enabled : sub.enabled}
+        onCheckedChange={enabled => { if (!save.isPending) save.mutate({ ...saved, enabled }); }} />}
     </div>
 
     <div className="flex flex-col gap-5 px-5 pt-5 pb-5">

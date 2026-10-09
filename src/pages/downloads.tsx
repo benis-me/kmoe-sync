@@ -84,7 +84,7 @@ export function DownloadsPage() {
     {status && <QueueBanner status={status} reserveMB={reserve} />}
 
     <div className="flex flex-col gap-4">
-      <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar">
+      <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar edge-fade-x">
         <ToggleGroup type="single" variant="segmented" aria-label="按状态筛选" value={filter}
           onValueChange={value => value && void navigate({ search: { status: value === 'all' ? undefined : value as Exclude<Filter, 'all'> }, replace: true })}>
           {FILTERS.map(item => {

@@ -7,6 +7,7 @@ import { statusQuery } from '@/lib/queries';
 import { useTheme } from '@/lib/theme';
 import { useLayout } from '@/stores/layout';
 import { Button } from '@/components/ui/button';
+import { IconSwap } from '@/components/ui/icon-swap';
 import { Indicator } from '@/components/ui/indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dot, MockBadge, QueueLine, QuotaBar, kmoeLabel, kmoeTone, quotaText } from './status';
@@ -23,13 +24,13 @@ function RunningBadge({ className }: { className?: string }) {
   </>;
 }
 
-const sideItem = 'relative z-10 flex h-9 items-center gap-2.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:text-foreground not-aria-[current=page]:hover:bg-sidebar-accent/70';
+const sideItem = 'relative z-10 flex h-9 items-center gap-2.5 rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:text-foreground not-aria-[current=page]:hover:bg-sidebar-accent/70';
 
 function ThemeToggle() {
   const [theme, toggle] = useTheme();
   const label = theme === 'dark' ? '切换到浅色模式' : '切换到深色模式';
   return <Button variant="ghost" size="icon-sm" className="-my-1.5 text-muted-foreground" aria-label={label} title={label} onClick={toggle}>
-    {theme === 'dark' ? <Sun /> : <Moon />}
+    <IconSwap id={theme}>{theme === 'dark' ? <Sun /> : <Moon />}</IconSwap>
   </Button>;
 }
 
@@ -38,7 +39,7 @@ function WideToggle() {
   const toggle = useLayout(state => state.toggleWide);
   const label = wide ? '退出宽屏模式' : '切换到宽屏模式';
   return <Button variant="ghost" size="icon-sm" className="-my-1.5 text-muted-foreground" aria-label={label} title={label} onClick={toggle}>
-    {wide ? <ChevronsRightLeft /> : <ChevronsLeftRight />}
+    <IconSwap id={wide ? 'wide' : 'centred'}>{wide ? <ChevronsRightLeft /> : <ChevronsLeftRight />}</IconSwap>
   </Button>;
 }
 
@@ -51,7 +52,7 @@ export function Sidebar({ connected }: { connected: boolean }) {
       </span>
       <div className="flex"><WideToggle /><ThemeToggle /></div>
     </div>
-    <nav aria-label="主导航" className="relative flex flex-col gap-0.5 px-3">
+    <nav aria-label="主导航" className="relative flex flex-col px-3">
       <Link to="/" activeOptions={EXACT} className={sideItem}><Library className="size-4 shrink-0" />书架</Link>
       <Link to="/discover" activeOptions={PREFIX} className={sideItem}><Compass className="size-4 shrink-0" />发现</Link>
       <Link to="/downloads" activeOptions={PREFIX} className={sideItem}><Download className="size-4 shrink-0" />下载<RunningBadge className="ml-auto" /></Link>
@@ -63,7 +64,7 @@ export function Sidebar({ connected }: { connected: boolean }) {
   </div>;
 }
 
-const statusRow = 'flex min-h-10 items-center gap-2.5 px-3 text-[13px] outline-none transition-colors duration-150 hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset';
+const statusRow = 'flex min-h-10 items-center gap-2.5 px-3 text-[13px] outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset';
 
 function SidebarStatus({ connected }: { connected: boolean }) {
   const { data: status } = useQuery(statusQuery);
@@ -110,7 +111,7 @@ export function TopBar({ title, actions, connected }: { title: string; actions: 
   </header>;
 }
 
-const tabItem = 'relative z-10 flex flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-medium text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-[current=page]:text-foreground';
+const tabItem = 'relative z-10 flex flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-[current=page]:text-foreground';
 
 export function TabBar() {
   return <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">

@@ -19,7 +19,7 @@ export const ComicCard = memo(function ComicCard({ entry, index }: { entry: Shel
     : meta?.bangumi === 'suggested' ? { tone: 'text-warning', label: 'Bangumi 条目待确认' }
     : meta?.bangumi === 'unmatched' ? { tone: 'text-muted-foreground', label: 'Bangumi 上没有找到' } : null;
   return <Link to="/comics/$key" params={{ key: comic.key }} style={{ '--i': index } as CSSProperties}
-    className="group/card stagger flex min-w-0 flex-col gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background">
+    className="group/card stagger flex min-w-0 flex-col gap-2.5 rounded-xl outline-none transition-[scale] duration-150 ease-out-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background active:scale-[0.98] active:duration-75">
     <div className="relative">
       <Cover src={comic.cover} title={comic.title} className="w-full rounded-xl transition-[translate,box-shadow] duration-200 ease-out-strong group-hover/card:-translate-y-0.5 group-hover/card:shadow-float" />
       {counts.new > 0 && <span className="absolute top-2 right-2 rounded-full bg-seal px-1.5 py-px text-[11px] font-semibold text-seal-foreground shadow-soft tabular-nums">新 {counts.new}</span>}
@@ -32,7 +32,8 @@ export const ComicCard = memo(function ComicCard({ entry, index }: { entry: Shel
       <div className="flex items-center gap-2">
         <span className="sr-only">已下载 {counts.downloaded} 项，共 {counts.items} 项</span>
         <span aria-hidden className="h-1 flex-1 overflow-hidden rounded-full bg-foreground/8">
-          <span className="block h-full rounded-full bg-foreground/55" style={{ width: `${percent(counts.downloaded, counts.items)}%` }} />
+          {/* A finished download moves the bar along instead of jumping it. */}
+          <span className="block h-full rounded-full bg-foreground/55 transition-transform duration-700 ease-out-strong" style={{ transform: `translateX(${percent(counts.downloaded, counts.items) - 100}%)` }} />
         </span>
         <span aria-hidden className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{counts.downloaded}/{counts.items}</span>
       </div>

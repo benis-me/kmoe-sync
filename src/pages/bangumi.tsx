@@ -76,7 +76,7 @@ export function BangumiPage() {
     </div>
     {source.error && <p role="alert" className="-mt-3 text-xs text-destructive">{source.error}</p>}
 
-    <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar">
+    <div className="-mx-1 overflow-x-auto px-1 py-1 no-scrollbar edge-fade-x">
       <ToggleGroup type="single" variant="segmented" aria-label="按匹配状态筛选" value={match}
         onValueChange={value => value && void navigate({ search: old => ({ ...old, match: value === 'pending' ? undefined : value as Exclude<Match, 'pending'> }), replace: true })}>
         {FILTERS.map(item => {
@@ -93,8 +93,10 @@ export function BangumiPage() {
       : !visible.length ? <EmptyState icon={<ListChecks />} title={current.empty} description={match === 'pending' ? '书单里的条目都处理好了。' : undefined} className="min-h-56 border" />
       : <ul aria-label={current.label} className="flex flex-col divide-y overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
         <AnimatePresence initial={false}>
-          {visible.map(item => <motion.li key={item.id} layout="position" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.15 } }}
-            className="flex items-center gap-3.5 px-4 py-3 max-sm:flex-wrap sm:gap-4">
+          {/* An item matched or ignored folds away while it fades; the rest slide up instead of jumping. */}
+          {visible.map(item => <motion.li key={item.id} layout="position" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            exit={{ opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
+            className="flex items-center gap-3.5 overflow-hidden px-4 py-3 max-sm:flex-wrap sm:gap-4">
             <Cover src={item.cover} title={item.title} className="w-11 rounded-md" />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <a href={item.url} target="_blank" rel="noreferrer" className="w-fit max-w-full truncate rounded-sm text-sm font-medium decoration-foreground/30 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">{item.title}</a>

@@ -41,7 +41,7 @@ const SECTIONS = GROUPS.flatMap((group): readonly Section[] => group.sections);
 type SectionId = Section['id'];
 export const isSection = (id: string): id is SectionId => SECTIONS.some(section => section.id === id);
 
-const item = 'relative z-10 flex shrink-0 items-center gap-2.5 rounded-lg text-sm font-medium whitespace-nowrap text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:text-foreground';
+const item = 'relative z-10 flex shrink-0 items-center gap-2.5 rounded-lg text-sm font-medium whitespace-nowrap text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:text-foreground';
 
 export function SettingsLayout() {
   const nav = useRef<HTMLElement>(null);
@@ -54,7 +54,7 @@ export function SettingsLayout() {
   return <Page>
     <h1 className="sr-only">设置</h1>
     <div className="grid grid-cols-1 items-start gap-x-10 gap-y-5 md:grid-cols-[184px_minmax(0,1fr)]">
-      <nav ref={nav} aria-label="设置分区" className="relative -mx-4 flex gap-5 overflow-x-auto border-b px-4 py-0.5 no-scrollbar md:sticky md:top-9 md:mx-0 md:flex-col md:gap-0.5 md:overflow-visible md:border-b-0 md:px-0 md:py-0">
+      <nav ref={nav} aria-label="设置分区" className="relative -mx-4 flex gap-5 overflow-x-auto border-b px-4 py-0.5 no-scrollbar max-md:edge-fade-x md:sticky md:top-9 md:mx-0 md:flex-col md:gap-0 md:overflow-visible md:border-b-0 md:px-0 md:py-0">
         {/* Headings and links stay direct children of the nav: the indicator follows the current link among them. */}
         {GROUPS.map((group, index) => [
           <span key={group.title} className="px-3 pt-5 pb-1.5 text-xs font-medium text-muted-foreground first:pt-0 max-md:hidden">{group.title}</span>,

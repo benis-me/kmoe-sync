@@ -25,10 +25,10 @@ const components: Components = {
   blockquote: ({ children }) => <blockquote className="flex flex-col gap-2 border-l-2 border-seal/40 pl-3 text-muted-foreground">{children}</blockquote>,
   hr: () => <hr className="my-1 border-border" />,
   a: ({ href = '', children }) => href
-    ? <a href={href} className="font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors duration-150 hover:decoration-foreground"
+    ? <a href={href} className="font-medium text-foreground underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground"
       {...(inApp(href) ? {} : { target: '_blank', rel: 'noreferrer' })}>{children}</a>
     : <span>{children}</span>,
-  img: ({ src, alt }) => typeof src === 'string' && inApp(src) ? <img src={src} alt={alt ?? ''} loading="lazy" className="max-h-48 rounded-md" /> : null,
+  img: ({ src, alt }) => typeof src === 'string' && inApp(src) ? <img src={src} alt={alt ?? ''} loading="lazy" className="max-h-48 rounded-md outline -outline-offset-1 outline-black/10 dark:outline-white/10" /> : null,
   pre: ({ children }) => <pre className="overflow-x-auto rounded-lg bg-muted px-3 py-2.5 font-mono text-[12px] leading-normal [&_code]:bg-transparent [&_code]:p-0">{children}</pre>,
   code: ({ children }) => <code className="rounded-[4px] bg-muted px-1 py-px font-mono text-[12px]">{children}</code>,
   table: ({ children }) => <div className="overflow-x-auto rounded-lg ring-1 ring-border"><table className="w-full border-collapse text-[12px]">{children}</table></div>,
