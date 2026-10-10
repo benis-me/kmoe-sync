@@ -2,6 +2,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.5] - 2026-10-11
+
+### 修复
+
+- 通过 `http://` 局域网地址打开时，「设置 → 通知」里的 Webhook / Bark / Telegram 按钮一点就报错「crypto.randomUUID is not a function」，加不了通知渠道。
+
 ## [0.3.4] - 2026-10-09
 
 ### 变更
@@ -165,6 +171,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.3.5]: https://github.com/benis-me/kmoe-sync/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/benis-me/kmoe-sync/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/benis-me/kmoe-sync/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/benis-me/kmoe-sync/compare/v0.3.1...v0.3.2
