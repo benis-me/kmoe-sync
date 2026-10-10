@@ -22,7 +22,9 @@ const KINDS: Record<Kind, { label: string; icon: LucideIcon }> = { webhook: { la
 const DEFAULT_EVENTS: NotifyEvent[] = ['new_items', 'download_failed', 'session_expired', 'quota_low'];
 
 function blank(kind: Kind): Channel {
-  const base = { id: crypto.randomUUID(), name: KINDS[kind].label, events: DEFAULT_EVENTS, enabled: true };
+  // crypto.randomUUID only exists in secure contexts; plain http://<NAS IP> isn't one.
+  const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+  const base = { id, name: KINDS[kind].label, events: DEFAULT_EVENTS, enabled: true };
   return kind === 'webhook' ? { ...base, kind, url: '' } : kind === 'bark' ? { ...base, kind, server: 'https://api.day.app', key: '' } : { ...base, kind, token: '', chatId: '' };
 }
 
