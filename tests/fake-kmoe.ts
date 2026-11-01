@@ -148,7 +148,7 @@ export function startFakeKmoe(options: { port?: number; hostname?: string; fileS
           `<meta property="og:image" content="${origin}/cover/${comic.key}.jpg"><table><tr><td><img class="img_book" src="/cover/${comic.key}.jpg"></td>
           <td class="author"><font class="text_bglight_big">${comic.title}</font><br><font class="text_bglight">作者：${authors}<a href="${origin}/list.php?s="></a></font><br>
           <font class="text_bglight">狀態：${comic.status}　地區：日本　語言：繁體</font></td></tr></table><input type="hidden" name="bookid" value="${comic.bookId}"><div id="div_desc_content">請訪問</div>`,
-          `var bookid = "${comic.bookId}"; var bookstatus = "${comic.status}";\ndocument.getElementById("div_desc_content").innerHTML = ${JSON.stringify(comic.description)};\ndata_book( "${hash}" );`), headers);
+          `var bookid = "${comic.bookId}"; var bookstatus = "${comic.status}";\ndocument.getElementById("div_desc_content").innerHTML = ${JSON.stringify(comic.description)};\nKmoe.book( "${hash}" );`), headers);
       }
       if (path === '/data_book.php') {
         const owner = hashes.get(url.searchParams.get('h') ?? '');

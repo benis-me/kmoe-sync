@@ -32,6 +32,14 @@ describe('parsers (real page fixtures)', () => {
     expect(await code(Promise.resolve().then(() => parseVolumeData({ msgid: 0, hash: '', bookkey: '', bookname: '', volcount: 0, voldata: [] })))).toBe('login_required');
     expect(await code(Promise.resolve().then(() => parseVolumeData({ volcount: 2, voldata: [] })))).toBe('site_changed');
   });
+  it('reads the volume hash from either call form: data_book("…") and Kmoe.book("…")', async () => {
+    const page = (call: string) => `<input type="hidden" name="bookid" value="31352">
+      <font class="text_bglight_big">測試漫畫</font><table><tr><td class="author">作者：</td></tr></table><script>${call}</script>`;
+    const older = await parseDetailPage(page('data_book( "179049020818a3dbd00000000000004b61da" );'), 'k', 'https://kzo.moe');
+    const current = await parseDetailPage(page('Kmoe.book( "17935410421X1129300332105314359947f6" );'), 'k', 'https://kzo.moe');
+    expect(older.dataHash).toBe('179049020818a3dbd00000000000004b61da');
+    expect(current.dataHash).toBe('17935410421X1129300332105314359947f6');
+  });
   it('parses JavaScript call arguments with escapes and concatenation, skipping declarations', () => {
     const source = `function disp_divinfo( a, b ) {}\n obj.disp_divinfo("x");\n disp_divinfo( "a\\"b", 'c' + "d", 12, "\\u4e2d" );`;
     expect(javascriptCalls(source, 'disp_divinfo')).toEqual([['a"b', 'cd', '12', '中']]);
