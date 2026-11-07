@@ -337,8 +337,6 @@ export function createApp(config: Config, options: AppOptions = {}) {
       return server;
     },
     async stop() {
-      // The throttle's saved state lives in this database: stop writing it before the database closes.
-      persistKmoeThrottle(null, () => {});
       clearInterval(tickTimer);
       clearInterval(heartbeat);
       app.dispose();
@@ -349,6 +347,8 @@ export function createApp(config: Config, options: AppOptions = {}) {
       await metadata.dispose();
       hub.flush();
       try { db.run("DELETE FROM meta WHERE key = 'instance' AND value LIKE ?", [`%${instanceId}%`]); } catch { /* ignore */ }
+      // In-flight work can still discover a block while stopping; keep saving until the database closes.
+      persistKmoeThrottle(null, () => {});
       db.close();
     },
   };
