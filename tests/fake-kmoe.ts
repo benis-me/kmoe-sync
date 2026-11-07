@@ -131,7 +131,7 @@ export function startFakeKmoe(options: { port?: number; hostname?: string; fileS
         const hits = comics.filter(comic => !query.trim() || fold(comic.title).includes(fold(query)) || comic.authors.some(author => author.includes(query)) || query === '*');
         const perPage = 2, total = Math.max(1, Math.ceil(hits.length / perPage));
         const calls = hits.slice((pageNumber - 1) * perPage, pageNumber * perPage).map((comic, index) =>
-          `disp_divinfo( "div_${index}", "${origin}/c/${comic.key}.htm", "${origin}/cover/${comic.key}.jpg", "0", "0", "0", "", "", "9.1", "${comic.title}", "${comic.authors.join(',')}", "${comic.volumes.at(-1)?.name}", "2026-09-20" );`).join('\n');
+          `disp_divinfo( "div_${index}", "${origin}/c/${comic.key}.htm", "${origin}/cover/${comic.key}.jpg", "0", "none", "none", "${comic.status === '完結' ? '' : 'none'}", "${comic.status === '停更' ? '' : 'none'}", "9.1", "${comic.title}", "${comic.authors.join(',')}", "${comic.volumes.at(-1)?.name}", "2026-09-20" );`).join('\n');
         return html(page(`搜索 ${query}`, '<div id="div_list"></div>', `var page_now = "${String(pageNumber).padStart(2, '0')}";\n${calls}\ndisp_divpage( "div_page", "${query}", "${total}" );`));
       }
       const detail = /^\/c\/([A-Za-z0-9]+)\.htm$/.exec(path);

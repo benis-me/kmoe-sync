@@ -142,8 +142,11 @@ describe('site operations against the fake mirror', () => {
     await s.login('reader@example.com', FAKE_PASSWORD);
     const first = await s.search('*');
     expect(first.hits.map(hit => hit.key)).toEqual(['8a3dbd', 'f7e2c9']);
+    expect(first.hits.map(hit => hit.marks)).toEqual([[], []]);
     expect(first.totalPages).toBe(3);
-    expect((await s.search('*', 2)).hits.map(hit => hit.key)).toEqual(['b1c4a0', 'c9d0e1']);
+    const second = await s.search('*', 2);
+    expect(second.hits.map(hit => hit.key)).toEqual(['b1c4a0', 'c9d0e1']);
+    expect(second.hits.map(hit => hit.marks)).toEqual([['完結'], []]);
     const { detail, items } = await s.comic('8a3dbd');
     expect(detail.bookId).toBe('31352');
     expect(items.map(item => item.id)).toEqual(['1001', '1002', '3005', '3016', '3021']);
