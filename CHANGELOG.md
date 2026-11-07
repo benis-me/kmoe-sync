@@ -2,6 +2,17 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.6] - 2026-11-07
+
+### 新增
+
+- 搜索结果的封面显示日文、英文、完结和停更标签，方便区分版本和连载状态；窄屏下会与「已在书架」标签一起换行。
+
+### 修复
+
+- 兼容 Kmoe 新版详情页的章节调用，修复漫画详情、追更检查和书库关联报「章节数据标识」错误，同时保留旧版页面支持。
+- 服务停止时继续保存尚未完成请求触发的限流状态，避免冷却记录丢失；修复测试间共享请求预算和已关闭数据库回调导致的偶发失败。
+
 ## [0.3.5] - 2026-10-11
 
 ### 修复
@@ -171,6 +182,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.3.6]: https://github.com/benis-me/kmoe-sync/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/benis-me/kmoe-sync/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/benis-me/kmoe-sync/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/benis-me/kmoe-sync/compare/v0.3.2...v0.3.3
