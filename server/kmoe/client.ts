@@ -61,7 +61,8 @@ function deflected(host: string): KmoeError {
   throttle.last = time;
   throttle.host = host;
   throttle.until = time + Math.min(COOLDOWN_MAX_MS, COOLDOWN_MS * 2 ** (throttle.strikes - 1)) * throttle.scale;
-  saveThrottle({ until: throttle.until, strikes: throttle.strikes, last: throttle.last, host: throttle.host });
+  // Saving is best effort: a data directory that cannot be written must not turn "Kmoe blocked us" into another error.
+  try { saveThrottle({ until: throttle.until, strikes: throttle.strikes, last: throttle.last, host: throttle.host }); } catch { /* kept in memory */ }
   return throttled();
 }
 /** Tests: shorten cooldowns (scale) and forget earlier blocks. */
@@ -91,6 +92,9 @@ async function politely(interval: number) {
   gate = turn.catch(() => {});
   await turn;
 }
+
+/** Tests: start with an empty budget window; requests left by an earlier test file otherwise delay the next ones. */
+export function resetKmoePacing() { recent.length = 0; lastRequestAt = 0; }
 
 /** Bun's codes for a connection that was open and then broke off. Refused connections and failed lookups are not retried. */
 const DROPPED = new Set(['ECONNRESET', 'ConnectionClosed', 'EPIPE']);

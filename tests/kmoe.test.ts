@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
-import { KmoeClient, kmoeBudget, kmoeThrottle, persistKmoeThrottle, resetKmoeThrottle, type ThrottleState } from '../server/kmoe/client';
+import { KmoeClient, kmoeBudget, kmoeThrottle, persistKmoeThrottle, resetKmoePacing, resetKmoeThrottle, type ThrottleState } from '../server/kmoe/client';
 import { KmoeError } from '../server/kmoe/errors';
 import { proxied } from '../server/lib/proxy';
 import { javascriptCalls, keyFromUrl, parseAccount, parseDetailPage, parseDownloadLink, parseSearchPage, parseVolumeData } from '../server/kmoe/parser';
@@ -68,6 +68,8 @@ describe('site operations against the fake mirror', () => {
   it('within a minute (here 400 ms) only so many requests go out; the next waits until the oldest leaves the window', async () => {
     const saved = { ...kmoeBudget };
     Object.assign(kmoeBudget, { perMinute: 3, windowMs: 400 });
+    // Requests made by an earlier test file can still be inside the (now shorter) window: measure from a clean slate.
+    resetKmoePacing();
     try {
       const client = new KmoeClient({ origin: fake.origin, interval: 1 });
       const started = Date.now();
