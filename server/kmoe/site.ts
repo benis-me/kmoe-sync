@@ -18,10 +18,10 @@ export class KmoeSite {
     if (response.url.pathname.endsWith('/login.php')) throw new KmoeError('login_required', `${what}需要登录 Kmoe（${this.diagnose(response)}）`);
   }
 
-  /** What a failed request looked like, for the error message: which page, which status, which cookies went with it. */
+  /** Report the response and current cookie names, never their values. */
   private diagnose(response: KmoeResponse): string {
     const cookies = Object.keys(this.client.cookieJar());
-    return `最终地址 ${response.url.pathname}，HTTP ${response.status}，请求携带的 cookie：${cookies.length ? cookies.join('/') : '无'}`;
+    return `最终地址 ${response.url.pathname}，HTTP ${response.status}，当前 Cookie 名称：${cookies.length ? cookies.join('/') : '无'}`;
   }
 
   /** Posts the password exactly once; never retried or replayed on another mirror. */
@@ -67,12 +67,12 @@ export class KmoeSite {
     }
     const detail = await parseDetailPage(page.text, key, this.client.origin);
     const volumes = await this.client.get('/data_book.php', { query: { h: detail.dataHash }, xhrFrom: path, referer: path, accept: 'json' });
+    this.requireSession(volumes, '章节数据');
     try {
       return { detail, items: parseVolumeData(jsonOf(volumes, '章节数据')) };
     } catch (error) {
-      // A withheld comic answers with an empty list; say what the request looked like, so the next report is decisive.
-      if (error instanceof KmoeError && error.code === 'content_blocked') {
-        throw new KmoeError('content_blocked', `${error.message}（${this.diagnose(volumes)}）`);
+      if (error instanceof KmoeError && error.code === 'login_required') {
+        throw new KmoeError('login_required', `${error.message}（${this.diagnose(volumes)}）`);
       }
       throw error;
     }

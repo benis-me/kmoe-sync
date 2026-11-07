@@ -15,6 +15,8 @@ export interface ClientOptions {
   interval?: number;
   timeout?: number;
   fetch?: typeof fetch;
+  /** Persist only this response's cookie changes, before another operation can finish. */
+  onCookies?: (changes: Record<string, string | null>) => void;
 }
 export interface KmoeRequest {
   query?: Record<string, string | number>;
@@ -61,7 +63,8 @@ function deflected(host: string): KmoeError {
   throttle.last = time;
   throttle.host = host;
   throttle.until = time + Math.min(COOLDOWN_MAX_MS, COOLDOWN_MS * 2 ** (throttle.strikes - 1)) * throttle.scale;
-  saveThrottle({ until: throttle.until, strikes: throttle.strikes, last: throttle.last, host: throttle.host });
+  // Saving is best effort: a data directory that cannot be written must not turn "Kmoe blocked us" into another error.
+  try { saveThrottle({ until: throttle.until, strikes: throttle.strikes, last: throttle.last, host: throttle.host }); } catch { /* kept in memory */ }
   return throttled();
 }
 /** Tests: shorten cooldowns (scale) and forget earlier blocks. */
@@ -92,6 +95,9 @@ async function politely(interval: number) {
   await turn;
 }
 
+/** Tests: start with an empty budget window; requests left by an earlier test file otherwise delay the next ones. */
+export function resetKmoePacing() { recent.length = 0; lastRequestAt = 0; }
+
 /** Bun's codes for a connection that was open and then broke off. Refused connections and failed lookups are not retried. */
 const DROPPED = new Set(['ECONNRESET', 'ConnectionClosed', 'EPIPE']);
 
@@ -103,6 +109,7 @@ export class KmoeClient {
   private readonly interval: number;
   private readonly timeout: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly onCookies: ClientOptions['onCookies'];
 
   constructor(options: ClientOptions) {
     this.origin = new URL(options.origin).origin;
@@ -110,6 +117,7 @@ export class KmoeClient {
     this.interval = options.interval ?? 400;
     this.timeout = options.timeout ?? 30_000;
     this.fetchImpl = options.fetch ?? fetch;
+    this.onCookies = options.onCookies;
   }
 
   get host() { return new URL(this.origin).host; }
@@ -181,6 +189,7 @@ export class KmoeClient {
   }
 
   private store(headers: Headers) {
+    const changes: Record<string, string | null> = Object.create(null);
     for (const line of headers.getSetCookie()) {
       const [pair, ...attributes] = line.split(';');
       const index = pair?.indexOf('=') ?? -1;
@@ -192,9 +201,12 @@ export class KmoeClient {
         if (key?.toLowerCase() === 'expires') return raw ? Date.parse(raw) <= Date.now() : false;
         return false;
       });
-      if (expired || value === '' || value === 'deleted') this.cookies.delete(name);
+      const removed = expired || value === '' || value === 'deleted';
+      if (removed) this.cookies.delete(name);
       else this.cookies.set(name, value);
+      changes[name] = removed ? null : value;
     }
+    if (Object.keys(changes).length) this.onCookies?.(changes);
   }
 }
 

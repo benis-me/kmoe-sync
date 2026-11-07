@@ -115,7 +115,11 @@ export function keyFromUrl(value: string, trustedHosts: readonly string[]): stri
 }
 
 // ---------- Search results ----------
-export interface SearchHit { key: string; title: string; authors: string[]; cover: string | null; language: string | null; latest: string | null; updatedAt: string | null }
+export interface SearchHit { key: string; title: string; authors: string[]; cover: string | null; language: string | null; marks: EditionMark[]; latest: string | null; updatedAt: string | null }
+/** The badges the site prints on a cover: the edition's language and the series' state. */
+export type EditionMark = '日文' | '英文' | '完結' | '停更';
+/** `disp_divinfo` puts them in four arguments that are inverted: '' means the badge is on. */
+const MARKS: readonly [number, EditionMark][] = [[4, '日文'], [5, '英文'], [6, '完結'], [7, '停更']];
 export interface SearchPage { page: number; totalPages: number; hits: SearchHit[] }
 
 const splitAuthors = (value: string) => [...new Set(value.split(/[,，、/]| {2,}/).map(part => part.trim()).filter(Boolean))];
@@ -147,6 +151,7 @@ export function parseSearchPage(html: string, requestedPage: number, origin: str
       key, title, authors: splitAuthors(plainText(args[10]!)), cover: httpsUrl(args[2], origin),
       // The four tag arguments are inverted: '' means the tag is active.
       language: args[4] === '' ? '日文' : args[5] === '' ? '英文' : null,
+      marks: MARKS.filter(([index]) => args[index] === '').map(([, mark]) => mark),
       latest: args[11] ? plainText(args[11]) || null : null,
       updatedAt: args[12] ? plainText(args[12]) || null : null,
     });
@@ -181,10 +186,10 @@ export async function parseDetailPage(html: string, key: string, origin: string)
   if (!bookId) throw siteChanged('漫画编号');
   const title = plainText(found.title) || plainText(found.docTitle).split(/\s*[:：]\s*/)[0] || '';
   if (!title) throw siteChanged('漫画标题');
-  // A comic the site withholds still answers 200, with this notice where the title would be
-  // ("為符合要求，此書內容已屏蔽。不會說明原因請勿提問"). It is not a login problem, and must not end the session.
+  // A takedown notice identifies a content restriction without probing or expiring the account.
   if (BLOCKED_TITLE.test(title)) throw new KmoeError('content_blocked', `Kmoe 屏蔽了这部漫画：${title.slice(0, 60)}`);
-  const hashes = javascriptCalls(html, 'data_book').filter(args => args.length);
+  // Current pages use Kmoe.book; older mirrors still call data_book.
+  const hashes = [...javascriptCalls(html, 'Kmoe.book'), ...javascriptCalls(html, 'data_book')].filter(args => args.length);
   const dataHash = hashes[0]?.[0]?.trim() ?? '';
   if (hashes[0]?.length !== 1 || !/^[0-9a-z]{8,512}$/i.test(dataHash)) throw siteChanged('章节数据标识');
   const cell = plainText(found.authorCell);
@@ -223,11 +228,9 @@ export function parseVolumeData(payload: unknown): RemoteItem[] {
   const rows = data.voldata;
   if (!Array.isArray(rows)) throw siteChanged('章节列表');
   if (Number(data.volcount) !== rows.length) throw siteChanged('章节数量');
-  // An empty list with a blank identity is what the site returns when it withholds a comic (a compliance block)
-  // or when the page was not bound to our session. Either way it says nothing about whether the session is alive:
-  // the caller decides that on the profile page, never from this answer alone.
+  // A blank identity is ambiguous: withSession must check the profile before expiring the account.
   if (!rows.length && !String(data.bookname ?? '').trim())
-    throw new KmoeError('content_blocked', 'Kmoe 没有返回这部漫画的章节数据（可能被站点屏蔽，或这次请求没有带上登录状态）');
+    throw new KmoeError('login_required', 'Kmoe 没有返回这部漫画的章节数据，需要确认登录是否仍然有效');
   return rows.map((row, index) => {
     if (!Array.isArray(row) || row.length < 12) throw siteChanged(`第 ${index + 1} 条章节数据`);
     // Names come HTML-escaped (「娜娜&amp;小八」).

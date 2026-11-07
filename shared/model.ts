@@ -23,6 +23,9 @@ const Timestamp = z.string();
 const Nullable = <T extends z.ZodType>(schema: T) => schema.nullable();
 
 // ---------- Comics ----------
+export const EditionMark = z.enum(['日文', '英文', '完結', '停更']);
+export type EditionMark = z.infer<typeof EditionMark>;
+
 export const ComicSummary = z.object({
   /** Page key from /c/<key>.htm; the stable identity used everywhere in the app. */
   key: z.string().min(1),
@@ -31,6 +34,8 @@ export const ComicSummary = z.object({
   /** Same-origin cover URL (/api/covers/<key>) or null. */
   cover: Nullable(z.string()),
   language: Nullable(z.string()),
+  /** Cover badges from the site's list (the edition's language, finished/hiatus). Only search results carry them. */
+  marks: z.array(EditionMark).optional(),
   /** Latest volume/chapter label shown by the site's list, if known. */
   latest: Nullable(z.string()),
   updatedAt: Nullable(z.string()),

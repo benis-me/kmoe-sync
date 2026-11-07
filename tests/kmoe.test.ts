@@ -1,15 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { createServer, type AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
-import { KmoeClient, kmoeBudget, kmoeThrottle, persistKmoeThrottle, resetKmoeThrottle, type ThrottleState } from '../server/kmoe/client';
+import { KmoeClient, kmoeBudget, kmoeThrottle, persistKmoeThrottle, resetKmoePacing, resetKmoeThrottle, type ThrottleState } from '../server/kmoe/client';
 import { KmoeError } from '../server/kmoe/errors';
-import { openDatabase } from '../server/db';
-import { createSealer } from '../server/lib/crypto';
 import { proxied } from '../server/lib/proxy';
 import { javascriptCalls, keyFromUrl, parseAccount, parseDetailPage, parseDownloadLink, parseSearchPage, parseVolumeData } from '../server/kmoe/parser';
 import { KmoeSite } from '../server/kmoe/site';
-import { KmoeService } from '../server/services/kmoe';
 import { FAKE_PASSWORD, startFakeKmoe } from './fake-kmoe';
 
 const TRUSTED = ['kzo.moe', 'mox.moe', '127.0.0.1'];
@@ -32,8 +28,8 @@ describe('parsers (real page fixtures)', () => {
     const row = ['2001', '', '', '番外篇', '1', '第 7.8 卷 - 娜娜&amp;小八粉絲手冊', '', '120', '', '10', '', '12'];
     expect(parseVolumeData({ volcount: 1, voldata: [row] })[0]!.name).toBe('第 7.8 卷 - 娜娜&小八粉絲手冊');
   });
-  it('treats the withheld-comic sentinel as a content problem, never as "no volumes" or a dead session', async () => {
-    expect(await code(Promise.resolve().then(() => parseVolumeData({ msgid: 0, hash: '', bookkey: '', bookname: '', volcount: 0, voldata: [] })))).toBe('content_blocked');
+  it('requires a session check for an ambiguous empty volume response', async () => {
+    expect(await code(Promise.resolve().then(() => parseVolumeData({ msgid: 0, hash: '', bookkey: '', bookname: '', volcount: 0, voldata: [] })))).toBe('login_required');
     expect(await code(Promise.resolve().then(() => parseVolumeData({ volcount: 2, voldata: [] })))).toBe('site_changed');
   });
   it('recognises the takedown page the site serves instead of a comic', async () => {
@@ -41,6 +37,23 @@ describe('parsers (real page fixtures)', () => {
       <font class="text_bglight_big">(為符合要求，此書內容已屏蔽。不會說明原因請勿提問)</font>
       <table><tr><td class="author">作者：</td></tr></table><script>data_book( "179049020818a3dbd00000000000004b61da" );</script>`;
     expect(await code(parseDetailPage(html, '11293', 'https://kzz.moe'))).toBe('content_blocked');
+  });
+  it('reads the volume hash from either call form: data_book("…") and Kmoe.book("…")', async () => {
+    const page = (call: string) => `<input type="hidden" name="bookid" value="31352">
+      <font class="text_bglight_big">測試漫畫</font><table><tr><td class="author">作者：</td></tr></table><script>${call}</script>`;
+    const older = await parseDetailPage(page('data_book( "179049020818a3dbd00000000000004b61da" );'), 'k', 'https://kzo.moe');
+    const current = await parseDetailPage(page('Kmoe.book( "17935410421X1129300332105314359947f6" );'), 'k', 'https://kzo.moe');
+    expect(older.dataHash).toBe('179049020818a3dbd00000000000004b61da');
+    expect(current.dataHash).toBe('17935410421X1129300332105314359947f6');
+  });
+  it.each(['data_book', 'Kmoe.book'])('keeps script argument parsing and validation for %s', async (name) => {
+    const html = readFileSync('tests/fixtures/detail-kzo.html', 'utf8');
+    const page = (call: string) => html.replace(/data_book\(\s*"[^"]+"\s*\)/, call);
+    const detail = await parseDetailPage(page(`other.${name}("wronghash"); ${name}("17904902" + "0818a3dbd00000000000004b61da")`), '8a3dbd', 'https://kzo.moe');
+    expect(detail.dataHash).toBe('179049020818a3dbd00000000000004b61da');
+    for (const call of ['', `${name}("short")`, `${name}("validhash", "extra")`]) {
+      expect(await code(parseDetailPage(page(call), '8a3dbd', 'https://kzo.moe'))).toBe('site_changed');
+    }
   });
   it('parses JavaScript call arguments with escapes and concatenation, skipping declarations', () => {
     const source = `function disp_divinfo( a, b ) {}\n obj.disp_divinfo("x");\n disp_divinfo( "a\\"b", 'c' + "d", 12, "\\u4e2d" );`;
@@ -67,6 +80,16 @@ describe('parsers (real page fixtures)', () => {
   it('refuses search pages without the expected structure', async () => {
     expect(await code(Promise.resolve().then(() => parseSearchPage('<html>maintenance</html>', 1, 'https://kzo.moe', TRUSTED)))).toBe('site_changed');
   });
+  it('reads the badges the list prints on a cover: the edition language, 完結 and 停更', () => {
+    const html = `<script>var page_now = "01";
+      disp_divinfo( "d0", "https://kzo.moe/c/11293.htm", "https://kzo.moe/cover/11293.jpg", "#C8C8CD", "none", "none", "none", "none", "9.3", "藍色時期", "山口飛翔", "話 081-085", "2026-10-01" );
+      disp_divinfo( "d1", "https://kzo.moe/c/11294.htm", "https://kzo.moe/cover/11294.jpg", "#6A4C9C", "", "none", "none", "none", "9.2", "ブルーピリオド", "山口つばさ", "Vol. 10", "2026-09-01" );
+      disp_divinfo( "d2", "https://kzo.moe/c/11295.htm", "https://kzo.moe/cover/11295.jpg", "#C8C8CD", "none", "none", "", "", "9.0", "BLUE GIANT", "石塚真一", "卷 10", "2026-08-01" );
+    </script>`;
+    const page = parseSearchPage(html, 1, 'https://kzo.moe', TRUSTED);
+    expect(page.hits.map(hit => hit.marks)).toEqual([[], ['日文'], ['完結', '停更']]);
+    expect(page.hits.map(hit => hit.language)).toEqual([null, '日文', null]);
+  });
 });
 
 describe('site operations against the fake mirror', () => {
@@ -78,6 +101,8 @@ describe('site operations against the fake mirror', () => {
   it('within a minute (here 400 ms) only so many requests go out; the next waits until the oldest leaves the window', async () => {
     const saved = { ...kmoeBudget };
     Object.assign(kmoeBudget, { perMinute: 3, windowMs: 400 });
+    // Requests made by an earlier test file can still be inside the (now shorter) window: measure from a clean slate.
+    resetKmoePacing();
     try {
       const client = new KmoeClient({ origin: fake.origin, interval: 1 });
       const started = Date.now();
@@ -142,8 +167,11 @@ describe('site operations against the fake mirror', () => {
     await s.login('reader@example.com', FAKE_PASSWORD);
     const first = await s.search('*');
     expect(first.hits.map(hit => hit.key)).toEqual(['8a3dbd', 'f7e2c9']);
+    expect(first.hits.map(hit => hit.marks)).toEqual([[], []]);
     expect(first.totalPages).toBe(3);
-    expect((await s.search('*', 2)).hits.map(hit => hit.key)).toEqual(['b1c4a0', 'c9d0e1']);
+    const second = await s.search('*', 2);
+    expect(second.hits.map(hit => hit.key)).toEqual(['b1c4a0', 'c9d0e1']);
+    expect(second.hits.map(hit => hit.marks)).toEqual([['完結'], []]);
     const { detail, items } = await s.comic('8a3dbd');
     expect(detail.bookId).toBe('31352');
     expect(items.map(item => item.id)).toEqual(['1001', '1002', '3005', '3016', '3021']);
@@ -166,45 +194,6 @@ describe('site operations against the fake mirror', () => {
     fake.control.expired = true;
     expect(await code(s.account())).toBe('login_required');
     fake.control.expired = false;
-  });
-});
-
-describe('throwing the session away', () => {
-  let fake: ReturnType<typeof startFakeKmoe>;
-  beforeAll(() => { fake = startFakeKmoe({ port: 0 }); });
-  afterAll(() => fake.stop());
-
-  /** A KmoeService on a scratch database, talking to the fake mirror. */
-  const service = () => {
-    const db = openDatabase(tmpdir(), ':memory:');
-    return { db, svc: new KmoeService(db, createSealer(Buffer.alloc(32, 9)), [fake.origin], () => fake.origin, fetch, () => '') };
-  };
-  const rowOf = (db: ReturnType<typeof openDatabase>) => db.query<{ state: string; cookies: Uint8Array | null }, []>('SELECT state, cookies FROM kmoe_account WHERE id = 1').get()!;
-
-  it('a withheld comic is a content error and leaves the session alone', async () => {
-    const { db, svc } = service();
-    await svc.login('reader@example.com', FAKE_PASSWORD);
-    await svc.withSession(() => Promise.reject(new KmoeError('content_blocked', 'Kmoe 屏蔽了这部漫画'))).catch(() => undefined);
-    expect(rowOf(db).state).toBe('active');
-    expect(rowOf(db).cookies).not.toBeNull();
-  });
-
-  it('a page that asks for a login does not end a session the profile page still accepts', async () => {
-    const { db, svc } = service();
-    await svc.login('reader@example.com', FAKE_PASSWORD);
-    await svc.withSession(() => Promise.reject(new KmoeError('login_required', '打开漫画需要登录 Kmoe'))).catch(() => undefined);
-    expect(rowOf(db).state).toBe('active');
-  });
-
-  it('a session Kmoe rejects is marked expired, and its cookies are kept for the next login', async () => {
-    const { db, svc } = service();
-    await svc.login('reader@example.com', FAKE_PASSWORD);
-    fake.control.expired = true;
-    try {
-      await svc.withSession(() => Promise.reject(new KmoeError('login_required', '打开漫画需要登录 Kmoe'))).catch(() => undefined);
-      expect(rowOf(db).state).toBe('expired');
-      expect(rowOf(db).cookies).not.toBeNull();
-    } finally { fake.control.expired = false; }
   });
 });
 

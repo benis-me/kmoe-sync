@@ -131,7 +131,7 @@ export function startFakeKmoe(options: { port?: number; hostname?: string; fileS
         const hits = comics.filter(comic => !query.trim() || fold(comic.title).includes(fold(query)) || comic.authors.some(author => author.includes(query)) || query === '*');
         const perPage = 2, total = Math.max(1, Math.ceil(hits.length / perPage));
         const calls = hits.slice((pageNumber - 1) * perPage, pageNumber * perPage).map((comic, index) =>
-          `disp_divinfo( "div_${index}", "${origin}/c/${comic.key}.htm", "${origin}/cover/${comic.key}.jpg", "0", "0", "0", "", "", "9.1", "${comic.title}", "${comic.authors.join(',')}", "${comic.volumes.at(-1)?.name}", "2026-09-20" );`).join('\n');
+          `disp_divinfo( "div_${index}", "${origin}/c/${comic.key}.htm", "${origin}/cover/${comic.key}.jpg", "0", "none", "none", "${comic.status === '完結' ? '' : 'none'}", "${comic.status === '停更' ? '' : 'none'}", "9.1", "${comic.title}", "${comic.authors.join(',')}", "${comic.volumes.at(-1)?.name}", "2026-09-20" );`).join('\n');
         return html(page(`搜索 ${query}`, '<div id="div_list"></div>', `var page_now = "${String(pageNumber).padStart(2, '0')}";\n${calls}\ndisp_divpage( "div_page", "${query}", "${total}" );`));
       }
       const detail = /^\/c\/([A-Za-z0-9]+)\.htm$/.exec(path);
@@ -148,7 +148,7 @@ export function startFakeKmoe(options: { port?: number; hostname?: string; fileS
           `<meta property="og:image" content="${origin}/cover/${comic.key}.jpg"><table><tr><td><img class="img_book" src="/cover/${comic.key}.jpg"></td>
           <td class="author"><font class="text_bglight_big">${comic.title}</font><br><font class="text_bglight">作者：${authors}<a href="${origin}/list.php?s="></a></font><br>
           <font class="text_bglight">狀態：${comic.status}　地區：日本　語言：繁體</font></td></tr></table><input type="hidden" name="bookid" value="${comic.bookId}"><div id="div_desc_content">請訪問</div>`,
-          `var bookid = "${comic.bookId}"; var bookstatus = "${comic.status}";\ndocument.getElementById("div_desc_content").innerHTML = ${JSON.stringify(comic.description)};\ndata_book( "${hash}" );`), headers);
+          `var bookid = "${comic.bookId}"; var bookstatus = "${comic.status}";\ndocument.getElementById("div_desc_content").innerHTML = ${JSON.stringify(comic.description)};\nKmoe.book( "${hash}" );`), headers);
       }
       if (path === '/data_book.php') {
         const owner = hashes.get(url.searchParams.get('h') ?? '');
