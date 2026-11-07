@@ -87,6 +87,8 @@ describe('site operations against the fake mirror', () => {
   });
 
   it('a redirect to a search engine is Kmoe throttling: every request pauses until the cooldown ends', async () => {
+    // A previous app/test may have closed the database captured by its persistence callback.
+    persistKmoeThrottle(null, () => { throw new Error('Database has closed'); });
     resetKmoeThrottle(1 / 6000); // 30 min → 300 ms
     try {
       const s = site();
@@ -125,7 +127,7 @@ describe('site operations against the fake mirror', () => {
       expect(kmoeThrottle()).toBeNull();
       persistKmoeThrottle({ ...saved[0]!, until: Date.now() + 60_000 }, () => {});
       expect(await code(s.search('*'))).toBe('rate_limited');
-    } finally { resetKmoeThrottle(); persistKmoeThrottle(null, () => {}); }
+    } finally { resetKmoeThrottle(); }
   });
 
   it('rejects a wrong password with a clear code and logs in with the right one', async () => {

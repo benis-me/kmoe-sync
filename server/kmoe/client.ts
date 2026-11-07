@@ -64,8 +64,11 @@ function deflected(host: string): KmoeError {
   saveThrottle({ until: throttle.until, strikes: throttle.strikes, last: throttle.last, host: throttle.host });
   return throttled();
 }
-/** Tests: shorten cooldowns (scale) and forget earlier blocks. */
-export function resetKmoeThrottle(scale = 1) { Object.assign(throttle, { until: 0, strikes: 0, last: 0, host: '', scale }); }
+/** Tests: shorten cooldowns (scale), forget earlier blocks and detach the previous persistence callback. */
+export function resetKmoeThrottle(scale = 1) {
+  Object.assign(throttle, { until: 0, strikes: 0, last: 0, host: '', scale });
+  saveThrottle = () => {};
+}
 
 /**
  * Whoever asks (pages, the API, MCP, the assistant, bulk jobs), the site sees at most `perMinute` requests in any minute:
