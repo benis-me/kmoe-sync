@@ -84,7 +84,8 @@ export class ComicService {
 
   async search(q: string, page: number): Promise<SearchResult> {
     const result = await this.kmoe.withSession(site => site.search(q, page));
-    const results = this.db.transaction(() => result.hits.map(hit => this.summary(this.cacheHit(hit))))();
+    // Cached for later, but the summary comes with the badges this search page printed (they are not stored).
+    const results = this.db.transaction(() => result.hits.map(hit => ({ ...this.summary(this.cacheHit(hit)), marks: hit.marks })))();
     return { query: q, page: result.page, totalPages: result.totalPages, results };
   }
 

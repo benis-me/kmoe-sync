@@ -113,7 +113,11 @@ export function keyFromUrl(value: string, trustedHosts: readonly string[]): stri
 }
 
 // ---------- Search results ----------
-export interface SearchHit { key: string; title: string; authors: string[]; cover: string | null; language: string | null; latest: string | null; updatedAt: string | null }
+export interface SearchHit { key: string; title: string; authors: string[]; cover: string | null; language: string | null; marks: EditionMark[]; latest: string | null; updatedAt: string | null }
+/** The badges the site prints on a cover: the edition's language and the series' state. */
+export type EditionMark = '日文' | '英文' | '完結' | '停更';
+/** `disp_divinfo` puts them in four arguments that are inverted: '' means the badge is on. */
+const MARKS: readonly [number, EditionMark][] = [[4, '日文'], [5, '英文'], [6, '完結'], [7, '停更']];
 export interface SearchPage { page: number; totalPages: number; hits: SearchHit[] }
 
 const splitAuthors = (value: string) => [...new Set(value.split(/[,，、/]| {2,}/).map(part => part.trim()).filter(Boolean))];
@@ -145,6 +149,7 @@ export function parseSearchPage(html: string, requestedPage: number, origin: str
       key, title, authors: splitAuthors(plainText(args[10]!)), cover: httpsUrl(args[2], origin),
       // The four tag arguments are inverted: '' means the tag is active.
       language: args[4] === '' ? '日文' : args[5] === '' ? '英文' : null,
+      marks: MARKS.filter(([index]) => args[index] === '').map(([, mark]) => mark),
       latest: args[11] ? plainText(args[11]) || null : null,
       updatedAt: args[12] ? plainText(args[12]) || null : null,
     });

@@ -57,6 +57,16 @@ describe('parsers (real page fixtures)', () => {
   it('refuses search pages without the expected structure', async () => {
     expect(await code(Promise.resolve().then(() => parseSearchPage('<html>maintenance</html>', 1, 'https://kzo.moe', TRUSTED)))).toBe('site_changed');
   });
+  it('reads the badges the list prints on a cover: the edition language, 完結 and 停更', () => {
+    const html = `<script>var page_now = "01";
+      disp_divinfo( "d0", "https://kzo.moe/c/11293.htm", "https://kzo.moe/cover/11293.jpg", "#C8C8CD", "none", "none", "none", "none", "9.3", "藍色時期", "山口飛翔", "話 081-085", "2026-10-01" );
+      disp_divinfo( "d1", "https://kzo.moe/c/11294.htm", "https://kzo.moe/cover/11294.jpg", "#6A4C9C", "", "none", "none", "none", "9.2", "ブルーピリオド", "山口つばさ", "Vol. 10", "2026-09-01" );
+      disp_divinfo( "d2", "https://kzo.moe/c/11295.htm", "https://kzo.moe/cover/11295.jpg", "#C8C8CD", "none", "none", "", "", "9.0", "BLUE GIANT", "石塚真一", "卷 10", "2026-08-01" );
+    </script>`;
+    const page = parseSearchPage(html, 1, 'https://kzo.moe', TRUSTED);
+    expect(page.hits.map(hit => hit.marks)).toEqual([[], ['日文'], ['完結', '停更']]);
+    expect(page.hits.map(hit => hit.language)).toEqual([null, '日文', null]);
+  });
 });
 
 describe('site operations against the fake mirror', () => {
@@ -134,8 +144,11 @@ describe('site operations against the fake mirror', () => {
     await s.login('reader@example.com', FAKE_PASSWORD);
     const first = await s.search('*');
     expect(first.hits.map(hit => hit.key)).toEqual(['8a3dbd', 'f7e2c9']);
+    expect(first.hits.map(hit => hit.marks)).toEqual([[], []]);
     expect(first.totalPages).toBe(3);
-    expect((await s.search('*', 2)).hits.map(hit => hit.key)).toEqual(['b1c4a0', 'c9d0e1']);
+    const second = await s.search('*', 2);
+    expect(second.hits.map(hit => hit.key)).toEqual(['b1c4a0', 'c9d0e1']);
+    expect(second.hits.map(hit => hit.marks)).toEqual([['完結'], []]);
     const { detail, items } = await s.comic('8a3dbd');
     expect(detail.bookId).toBe('31352');
     expect(items.map(item => item.id)).toEqual(['1001', '1002', '3005', '3016', '3021']);
