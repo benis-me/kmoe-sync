@@ -416,16 +416,13 @@ export class LibraryService {
     const walk = async (path: string, depth: number): Promise<void> => {
       context.signal.throwIfAborted();
       context.progress({ current: path === '/' ? '书库根目录' : path, done: found.size });
-      let entries;
-      try { entries = await storage.list(path, { signal: context.signal }); } catch (error) {
-        if (path === '/' || !(error instanceof StorageError)) throw error;
-        return;
-      }
+      const entries = await storage.list(path, { signal: context.signal, strict: true });
       const books = entries.filter(entry => !entry.directory && BOOK_FILE.test(entry.name)).map(entry => entry.name);
       if (books.length && path !== '/') found.set(path, books);
       if (depth < MAX_DEPTH) for (const entry of entries) if (entry.directory) await walk(entry.path, depth + 1);
     };
     await walk('/', 0);
+    context.signal.throwIfAborted();
     const time = now();
     const before = new Map(db.query<{ path: string; books: number }, [number]>('SELECT path, books FROM library_folders WHERE target_id = ?').all(targetId).map(row => [row.path, row.books]));
     const upsert = db.query(`INSERT INTO library_folders (target_id, path, name, books, format, sample, hint, scanned_at, created_at, updated_at)

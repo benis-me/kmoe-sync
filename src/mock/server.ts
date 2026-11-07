@@ -1042,6 +1042,9 @@ export function createMockServer(scenario: Scenario) {
       const users = [...db.subscriptions.values()].filter(s => s.targetId === target.id).length;
       if (users) throw new Fail(409, 'conflict', `有 ${users} 个订阅正在使用这个位置，请先修改它们的存储位置`);
       db.targets = db.targets.filter(t => t.id !== target.id);
+      db.metadata.komga.libraries = db.metadata.komga.libraries.filter(entry => entry.targetId !== target.id);
+      db.folders = db.folders.filter(folder => folder.targetId !== target.id);
+      delete db.lastScan[target.id];
       emitStatus();
       return OK;
     },

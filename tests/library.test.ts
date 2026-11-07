@@ -1,5 +1,5 @@
 // Library import and folder mapping, end to end against the fake Kmoe mirror with a local library in a temp directory.
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import { createApp } from '../server/app';
 import { resetKmoeThrottle } from '../server/kmoe/client';
 import { canonicalTitle, similarity } from '../server/metadata/text';
 import { folderKeywords, opfIds, titleHint } from '../server/services/library';
+import { StorageError } from '../server/storage/types';
 import { FAKE_PASSWORD, startFakeKmoe } from './fake-kmoe';
 
 describe('title helpers', () => {
@@ -153,6 +154,76 @@ describe('library import', () => {
     expect(back.data.folder).toMatchObject({ path: '/葬送的芙莉蓮', mapped: false });
     expect(back.data.states['2001'].state).toBe('downloaded');
   }, 30_000);
+});
+
+describe('scan data protection', () => {
+  test.each(['network', 'auth', 'io', 'not_found', 'cancelled'] as const)('an incomplete scan preserves folders and metadata: %s', async failure => {
+    const path = `Scan-${failure}`;
+    book(`${path}/ARead`, '01.epub');
+    book(`${path}/ZUnread`, '01.epub');
+    const target = app.targets.create({ kind: 'local', name: path, path: `/${path}`, rule: '{title}/{filename}' });
+    const originalStorage = app.targets.storage.bind(app.targets), storage = originalStorage(target.id);
+    let interrupt = false;
+    const listings: { path: string; strict: boolean | undefined }[] = [];
+    const mocked = spyOn(app.targets, 'storage').mockImplementation(id => id !== target.id ? originalStorage(id) : {
+      ...storage,
+      async list(path, options) {
+        listings.push({ path, strict: options?.strict });
+        if (interrupt && path === '/ZUnread') {
+          if (failure === 'cancelled') { app.jobs.cancel(); return []; }
+          // A non-strict local listing can hide unreadable entries instead of reporting an I/O failure.
+          if (failure === 'io' && !options?.strict) return [];
+          throw new StorageError(failure, `listing failed: ${failure}`, failure === 'network');
+        }
+        return storage.list(path, options);
+      },
+    });
+    const scan = async () => {
+      app.library.scan(target.id, false);
+      return until(async () => app.jobs.current(), job => !job.running);
+    };
+    const snapshot = () => ({
+      folders: app.db.query('SELECT * FROM library_folders WHERE target_id = ? ORDER BY id').all(target.id),
+      metadata: app.db.query('SELECT m.* FROM folder_metadata m JOIN library_folders f ON f.id = m.folder_id WHERE f.target_id = ? ORDER BY m.folder_id').all(target.id),
+      scannedAt: app.settings.value(`libraryScan:${target.id}`, null),
+    });
+    try {
+      expect((await scan()).error).toBeNull();
+      const unread = app.db.query<{ id: number }, [number]>("SELECT id FROM library_folders WHERE target_id = ? AND path = '/ZUnread'").get(target.id)!;
+      const polish = JSON.stringify({ subjectId: 100, status: 'accepted' });
+      const written = JSON.stringify({ seriesId: 's1', series: { title: 'saved' }, books: {} });
+      app.db.run("UPDATE folder_metadata SET bangumi_id = 100, bangumi_state = 'matched', bangumi_source = 'manual', ai_polish = ?, komga_written = ?, dirty = 0 WHERE folder_id = ?", [polish, written, unread.id]);
+      app.settings.setValue(`libraryScan:${target.id}`, '2020-01-01T00:00:00.000Z');
+      const before = snapshot();
+      book(`${path}/ARead`, '02.epub');
+      book(`${path}/ZUnread`, '02.epub');
+      interrupt = true;
+      listings.length = 0;
+      expect(await scan()).toMatchObject({
+        kind: 'scan', running: false, cancelled: failure === 'cancelled',
+        error: failure === 'cancelled' ? null : `listing failed: ${failure}`,
+      });
+      expect(listings).toEqual(['/', '/ARead', '/ZUnread'].map(path => ({ path, strict: true })));
+      expect(snapshot()).toEqual(before);
+
+      interrupt = false;
+      expect(await scan()).toMatchObject({ error: null, cancelled: false });
+      expect(app.library.row(unread.id)).toMatchObject({ path: '/ZUnread', books: 2, comic_id: null });
+      expect(app.db.query('SELECT * FROM folder_metadata WHERE folder_id = ?').get(unread.id)).toMatchObject({
+        bangumi_id: 100, bangumi_source: 'manual', ai_polish: polish, komga_written: written,
+      });
+      expect(snapshot().scannedAt).not.toBe(before.scannedAt);
+      // A complete scan still removes a folder that really disappeared, including its metadata.
+      rmSync(join(library, path, 'ZUnread'), { recursive: true });
+      expect((await scan()).error).toBeNull();
+      expect(app.db.query('SELECT 1 FROM library_folders WHERE id = ?').get(unread.id)).toBeNull();
+      expect(app.db.query('SELECT 1 FROM folder_metadata WHERE folder_id = ?').get(unread.id)).toBeNull();
+    } finally {
+      mocked.mockRestore();
+      app.targets.remove(target.id);
+      rmSync(join(library, path), { recursive: true, force: true });
+    }
+  });
 });
 
 describe('following an imported comic', () => {

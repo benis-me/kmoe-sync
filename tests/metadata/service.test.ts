@@ -68,7 +68,7 @@ function setup(fixtures: Record<string, unknown> = {}, net: (next: typeof fetch)
   const metadata = open();
   const targetId = targets.list()[0]!.id;
   return {
-    db, events, metadata, jobs, activity, targetId, bgm, dataDir, settings,
+    db, events, metadata, jobs, activity, targetId, bgm, dataDir, settings, targets,
     /** The service as it starts up again on the same database (e.g. after an upgrade). */
     reopen: open,
     folder(path: string, extra: { books?: number; hint?: string; comicId?: number } = {}): number {
@@ -125,6 +125,69 @@ describe('settings', () => {
     expect(() => metadata.patchSettings({ komga: { url: 'http://admin:pw@nas:7799' } })).toThrow('账号密码');
     expect(() => metadata.patchSettings({ komga: { libraries: [{ targetId: 999, libraryId: 'lib1' }] } })).toThrow('不存在');
     expect(metadata.settings().komga.url).toBe('http://192.168.1.10:25600');
+  });
+
+  test('target deletion atomically removes its settings references and preserves other bindings and configuration', () => {
+    const s = setup();
+    const removed = s.targets.create({ kind: 'local', name: 'Removed', path: '/Removed', rule: '{title}/{filename}' });
+    const libraries = [{ targetId: s.targetId, libraryId: 'lib1' }, { targetId: removed.id, libraryId: 'lib2' }];
+    const saved = s.configure({
+      komga: { url: komga.url, secret: komga.apiKey, libraries },
+      bangumi: { source: 'online', token: 'fixture-bangumi-token' }, options: { tagLimit: 4, readingDirection: 'WEBTOON' },
+    });
+    s.targets.setDefault(removed.id);
+    s.settings.setValue(`libraryScan:${s.targetId}`, '2020-01-01T00:00:00.000Z');
+    s.settings.setValue(`libraryScan:${removed.id}`, '2020-02-01T00:00:00.000Z');
+    s.settings.setValue('metadata.bangumiOnline', { reachable: true, checkedAt: now(), error: null });
+    const appSettings = s.settings.get();
+    const snapshot = () => ({
+      targets: s.db.query('SELECT * FROM targets ORDER BY id').all(),
+      settings: s.db.query<{ key: string; value: string }, []>('SELECT * FROM settings ORDER BY key').all(),
+    });
+    const before = snapshot();
+    // Fail the final default-target update, after the target, scan timestamp and Komga binding were removed.
+    s.db.exec("CREATE TEMP TRIGGER fail_default BEFORE UPDATE ON settings WHEN OLD.key = 'app' BEGIN SELECT RAISE(ABORT, 'settings write failed'); END");
+    try {
+      expect(() => s.targets.remove(removed.id)).toThrow('settings write failed');
+      expect(snapshot()).toEqual(before);
+    } finally { s.db.exec('DROP TRIGGER fail_default'); }
+
+    s.targets.remove(removed.id);
+    const settings = s.metadata.settings();
+    expect(settings).toMatchObject({
+      ...saved, komga: { ...saved.komga, libraries: [libraries[0]!] },
+      bangumi: { ...saved.bangumi, online: { reachable: true, checkedAt: expect.any(String), error: null } },
+    });
+    expect(s.settings.get()).toEqual({ ...appSettings, defaultTargetId: s.targetId });
+    expect(s.settings.value(`libraryScan:${removed.id}`, null)).toBeNull();
+    const unrelated = ({ key }: { key: string }) => !['metadata', 'app', `libraryScan:${removed.id}`].includes(key);
+    expect(snapshot().settings.filter(unrelated)).toEqual(before.settings.filter(unrelated));
+    expect(s.reopen().settings()).toEqual(settings);
+  });
+
+  test('a reused target id cannot inherit the old Komga library or write its same-named series', async () => {
+    const s = setup();
+    s.configure({ options: { books: false } });
+    s.settings.setValue(`libraryScan:${s.targetId}`, now());
+    const old = komga.addSeries('old-series', '/GRAND BLUE 碧藍之海');
+    const oldMetadata = { ...old.metadata };
+    const oldFolder = s.folder('/GRAND BLUE 碧藍之海');
+    s.metadata.markDirty(oldFolder);
+    s.targets.remove(s.targetId);
+    expect(s.settings.get().defaultTargetId).toBeNull();
+    expect(s.db.query('SELECT 1 FROM library_folders').get()).toBeNull();
+    expect(s.db.query('SELECT 1 FROM folder_metadata').get()).toBeNull();
+    const replacement = s.targets.create({ kind: 'local', name: 'Unrelated', path: '/Other', rule: '{title}/{filename}' });
+    expect(replacement.id).toBe(s.targetId);
+    expect(s.metadata.settings().komga.libraries).toEqual([]);
+    expect(s.settings.value(`libraryScan:${replacement.id}`, null)).toBeNull();
+    const folder = s.folder('/GRAND BLUE 碧藍之海');
+    await s.metadata.matchFolder(folder, { subject: '118165' });
+    await expect(s.metadata.syncFolder(folder)).rejects.toThrow('还没有对应的 Komga 书库');
+    expect(s.state(folder).komga.state).toBe('disabled');
+    expect(komga.state.requests).toEqual([]);
+    expect(komga.state.patches).toEqual([]);
+    expect(old.metadata).toEqual(oldMetadata);
   });
 
   test('testKomga: draft merged with saved settings, clear errors', async () => {

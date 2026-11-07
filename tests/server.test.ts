@@ -429,6 +429,51 @@ describe('WebDAV target', () => {
   });
 });
 
+describe('target deletion', () => {
+  test('subscriptions and active downloads refuse deletion before changing any settings', async () => {
+    const savedApp = app.settings.value('app', {}), savedMetadata = app.settings.value<unknown>('metadata', null);
+    const pause = app.settings.pause(), otherId = app.targets.defaultId()!;
+    const target = app.targets.create({ kind: 'local', name: 'Delete guard', path: '/DeleteGuard', rule: '{title}/{filename}' });
+    const time = new Date().toISOString();
+    const comicId = Number(app.db.run('INSERT INTO comics (key, title, created_at, updated_at) VALUES (?, ?, ?, ?)', ['deleteguard', 'Delete guard', time, time]).lastInsertRowid);
+    const itemId = Number(app.db.run("INSERT INTO items (comic_id, remote_id, type, name, first_seen_at, last_seen_at) VALUES (?, '1', 'volume', '01', ?, ?)", [comicId, time, time]).lastInsertRowid);
+    app.settings.setPause('manual');
+    app.targets.setDefault(target.id);
+    const bindings = [{ targetId: otherId, libraryId: 'kept' }, { targetId: target.id, libraryId: 'removed' }];
+    app.settings.setValue('metadata', { enabled: false, komga: { libraries: bindings } });
+    app.settings.setValue(`libraryScan:${target.id}`, time);
+    const settings = () => app.db.query('SELECT * FROM settings ORDER BY key').all();
+    const before = settings();
+    const refused = async () => {
+      expect(await api('DELETE', `/api/targets/${target.id}`)).toMatchObject({ status: 409, data: { error: { code: 'target_in_use' } } });
+      expect(app.targets.exists(target.id)).toBe(true);
+      expect(settings()).toEqual(before);
+    };
+    try {
+      app.db.run("INSERT INTO subscriptions (comic_id, types, format, target_id, strategy, created_at, updated_at) VALUES (?, '[\"volume\"]', 'epub', ?, 'future', ?, ?)", [comicId, target.id, time, time]);
+      await refused();
+      app.db.run('DELETE FROM subscriptions WHERE comic_id = ?', [comicId]);
+      app.db.run("INSERT INTO tasks (comic_id, item_id, target_id, format, status, origin, created_at) VALUES (?, ?, ?, 'epub', 'queued', 'manual', ?)", [comicId, itemId, target.id, time]);
+      await refused();
+      app.db.run("UPDATE tasks SET status = 'running' WHERE comic_id = ?", [comicId]);
+      await refused();
+      app.db.run("UPDATE tasks SET status = 'completed' WHERE comic_id = ?", [comicId]);
+      expect((await api('DELETE', `/api/targets/${target.id}`)).status).toBe(200);
+      expect(app.targets.exists(target.id)).toBe(false);
+      expect(app.metadata.settings().komga.libraries).toEqual([bindings[0]!]);
+      expect(app.settings.value(`libraryScan:${target.id}`, null)).toBeNull();
+      expect(app.settings.get().defaultTargetId).toBe(otherId);
+    } finally {
+      app.db.run('DELETE FROM comics WHERE id = ?', [comicId]);
+      if (app.targets.exists(target.id)) app.targets.remove(target.id);
+      app.settings.setValue('app', savedApp);
+      if (savedMetadata !== null) app.settings.setValue('metadata', savedMetadata);
+      else app.db.run("DELETE FROM settings WHERE key = 'metadata'");
+      app.settings.setPause(pause.reason);
+    }
+  });
+});
+
 describe('external API and MCP', () => {
   let token = '';
   const mcp = (body: object) => fetch(`${base}/mcp`, { method: 'POST', body: JSON.stringify({ jsonrpc: '2.0', ...body }), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });

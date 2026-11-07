@@ -94,6 +94,39 @@ it('copies exclusively when a hard link is impossible (EXDEV) and cleans up afte
   } finally { link.mockRestore(); }
 });
 
+it.each(['put', 'move'] as const)('%s never replaces a competing file when hard links are unsupported', async operation => {
+  const sources = [source('a.part', 'AAA'), source('b.part', 'BBBB')];
+  const destination = join(root, 'book.epub');
+  // Separate instances can target the same folder (downloads and rename jobs do not share an instance).
+  const targets = sources.map(() => createLocalTarget({ libraryRoot: root, path: '/' }));
+  const method = operation === 'put' ? 'stat' : 'lstat';
+  const original = fs[method].bind(fs);
+  let checks = 0, release!: () => void;
+  const checked = new Promise<void>(resolve => { release = resolve; });
+  const link = spyOn(fs, 'link').mockRejectedValue(Object.assign(new Error('no hard links'), { code: 'ENOTSUP' }));
+  const stat = spyOn(fs, method).mockImplementation((async (...args: Parameters<typeof fs.stat>) => {
+    // Both writers see a free name; publishing, rather than this earlier check, must settle the race.
+    if (String(args[0]) === destination && checks < 2) {
+      if (++checks === 2) release();
+      await checked;
+      throw Object.assign(new Error('not found'), { code: 'ENOENT' });
+    }
+    return original(...args);
+  }) as typeof fs.stat);
+  try {
+    const outcomes = await Promise.allSettled(sources.map((file, i) => operation === 'put'
+      ? targets[i]!.put('/book.epub', file, signal())
+      : targets[i]!.move(`/.kmoesync-tmp/${i === 0 ? 'a' : 'b'}.part`, '/book.epub')));
+    expect(outcomes.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    const winner = outcomes.findIndex(result => result.status === 'fulfilled'), loser = 1 - winner;
+    expect(outcomes[loser]).toMatchObject({ status: 'rejected', reason: { code: 'conflict' } });
+    expect(readFileSync(destination, 'utf8')).toBe(winner === 0 ? 'AAA' : 'BBBB');
+    expect(existsSync(sources[winner]!.path)).toBe(false);
+    expect(existsSync(sources[loser]!.path)).toBe(true);
+    expect(readdirSync(root).filter(name => name.startsWith('.kmoesync-'))).toEqual(['.kmoesync-tmp']);
+  } finally { stat.mockRestore(); link.mockRestore(); }
+});
+
 it('rejects traversal and symlinks that lead outside the library root', async () => {
   expect(() => createLocalTarget({ libraryRoot: root, path: '/../etc' })).toThrow(StorageError);
   const storage = createLocalTarget({ libraryRoot: root, path: '/' });
@@ -174,7 +207,7 @@ it('renames a file in place, never onto another entry', async () => {
   expect(readdirSync(join(library, '鏈鋸人'))).not.toContain('鏈鋸人 - 卷 02.epub');
 });
 
-it('falls back to a checked rename where hard links are refused', async () => {
+it('falls back to an exclusive copy where hard links are refused', async () => {
   mkdirSync(join(root, 'a'));
   writeFileSync(join(root, 'a', 'old.epub'), 'x');
   writeFileSync(join(root, 'a', 'taken.epub'), 'y');
@@ -185,6 +218,22 @@ it('falls back to a checked rename where hard links are refused', async () => {
     await storage.move('/a/old.epub', '/a/new.epub');
     expect(readdirSync(join(root, 'a')).sort()).toEqual(['new.epub', 'taken.epub']);
   } finally { link.mockRestore(); }
+});
+
+it.each(['no_space', 'wrong_size'] as const)('keeps the original when a rename copy fails: %s', async failure => {
+  const file = source('original.epub', 'original');
+  const storage = createLocalTarget({ libraryRoot: root, path: '/' });
+  const link = spyOn(fs, 'link').mockRejectedValue(Object.assign(new Error('no hard links'), { code: 'ENOTSUP' }));
+  const copy = spyOn(fs, 'copyFile').mockImplementationOnce(async (_from, to) => {
+    if (failure === 'no_space') throw Object.assign(new Error('no space'), { code: 'ENOSPC' });
+    writeFileSync(String(to), 'part');
+  });
+  try {
+    expect(await storage.move('/.kmoesync-tmp/original.epub', '/book.epub').catch(error => error))
+      .toMatchObject({ code: failure === 'no_space' ? 'no_space' : 'io' });
+    expect(readFileSync(file.path, 'utf8')).toBe('original');
+    expect(existsSync(join(root, 'book.epub'))).toBe(false);
+  } finally { copy.mockRestore(); link.mockRestore(); }
 });
 
 it('renames a symlink never through to the file it points at', async () => {

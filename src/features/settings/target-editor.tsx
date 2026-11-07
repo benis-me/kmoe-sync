@@ -100,7 +100,13 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
   });
   const remove = useMutation({
     mutationFn: () => request('DELETE /api/targets/:id', { params: { id: target!.id } }),
-    onSuccess: () => { void refresh(); toast.success(`已删除「${target!.name}」`, { description: '书库中的文件不受影响。' }); },
+    onSuccess: () => {
+      // A later target can reuse this id; it must not inherit cached folders, AI reviews or Komga bindings.
+      for (const queryKey of [['library', target!.id], ['ai-polish', target!.id], ['metadata-settings']]) client.removeQueries({ queryKey });
+      for (const queryKey of [['shelf'], ['comic'], ['tasks']]) void client.invalidateQueries({ queryKey });
+      void refresh();
+      toast.success(`已删除「${target!.name}」`, { description: '书库中的文件不受影响。' });
+    },
   });
   const makeDefault = useMutation({
     mutationFn: () => request('POST /api/targets/:id/default', { params: { id: target!.id } }),

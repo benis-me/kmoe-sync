@@ -1,5 +1,5 @@
 // Storage targets: local directories under the library root and WebDAV servers. Passwords are sealed at rest.
-import type { Target, TargetInput } from '@shared/model';
+import type { MetadataSettings, Target, TargetInput } from '@shared/model';
 import { DEFAULT_RULE, NamingError, normalizePath, validateRule } from '@shared/naming';
 import { now, type DB } from '../db';
 import { AppError } from '../http/errors';
@@ -101,8 +101,16 @@ export class TargetService {
     if (subscriptions) throw new AppError(409, 'target_in_use', `有 ${subscriptions} 个订阅保存到这里，请先修改这些订阅的存储位置`);
     const active = this.db.query<{ n: number }, [number]>("SELECT COUNT(*) AS n FROM tasks WHERE target_id = ? AND status IN ('queued', 'running')").get(id)!.n;
     if (active) throw new AppError(409, 'target_in_use', `还有 ${active} 个下载任务保存到这里，请先取消或等待完成`);
-    this.db.run('DELETE FROM targets WHERE id = ?', [id]);
-    if (this.settings.get().defaultTargetId === id) this.settings.patch({ defaultTargetId: this.defaultId() });
+    this.db.transaction(() => {
+      this.db.run('DELETE FROM targets WHERE id = ?', [id]);
+      this.db.run('DELETE FROM settings WHERE key = ?', [`libraryScan:${id}`]);
+      const metadata = this.settings.value<{ komga?: { libraries?: MetadataSettings['komga']['libraries'] } } | null>('metadata', null);
+      if (metadata?.komga?.libraries?.some(entry => entry.targetId === id)) {
+        metadata.komga.libraries = metadata.komga.libraries.filter(entry => entry.targetId !== id);
+        this.settings.setValue('metadata', metadata);
+      }
+      if (this.settings.get().defaultTargetId === id) this.settings.patch({ defaultTargetId: this.defaultId() });
+    })();
   }
 
   setDefault(id: number) { this.row(id); this.settings.patch({ defaultTargetId: id }); }
