@@ -53,11 +53,11 @@ export function DestinationBar({ targets, target, directory, mapped, format, lin
         <span className="sr-only">保存位置：</span>
         <HardDrive aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         {target ? <>
-          <span className="max-w-36 shrink-0 truncate font-medium">{target.name}</span>
-          <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60" />
-          <span title={directory} className="min-w-0 truncate font-mono text-[13px]">{middleTruncate(directory, 48)}</span>
+          <span className="min-w-0 max-w-36 truncate font-medium">{target.name}</span>
+          <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60 max-sm:hidden" />
+          <span title={directory} className="min-w-0 truncate font-mono text-[13px] max-sm:hidden">{middleTruncate(directory, 48)}</span>
           {mapped && <Badge variant="secondary" className="max-md:hidden">已对应现有文件夹</Badge>}
-          <span className="shrink-0 text-muted-foreground max-sm:hidden">· {FORMAT_LABELS[format]} · {LINE_LABELS[line]}</span>
+          <span className="shrink-0 text-muted-foreground">· {FORMAT_LABELS[format]}<span className="max-sm:hidden"> · {LINE_LABELS[line]}</span></span>
         </> : <span className="text-muted-foreground">还没有存储位置</span>}
         <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-xs font-medium text-muted-foreground group-hover/dest:text-foreground">
           {open ? '收起' : '更改'}

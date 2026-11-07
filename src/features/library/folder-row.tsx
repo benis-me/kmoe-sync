@@ -124,7 +124,7 @@ function KomgaLine({ folder }: { folder: LibraryFolder }) {
   </a> : <span className="flex min-w-0 items-center gap-1.5">{text}</span>;
 }
 
-export const FolderRow = memo(function FolderRow({ folder, index, pending, busy, meta, handlers }: {
+export const FolderRow = memo(function FolderRow({ folder, index, pending, busy, meta, deferRendering, handlers }: {
   folder: LibraryFolder;
   index: number;
   /** An action on this folder is in flight. */
@@ -133,6 +133,8 @@ export const FolderRow = memo(function FolderRow({ folder, index, pending, busy,
   busy: boolean;
   /** Show the Bangumi/Komga column. */
   meta: boolean;
+  /** Large libraries let the browser skip layout and paint for rows outside the viewport. */
+  deferRendering: boolean;
   handlers: RowHandlers;
 }) {
   const parent = parentOf(folder.path);
@@ -143,6 +145,7 @@ export const FolderRow = memo(function FolderRow({ folder, index, pending, busy,
   return <li style={{ '--i': index } as CSSProperties}
     className={cn('stagger grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2.5 px-4 py-3 sm:px-5',
       meta ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_auto]' : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto]',
+      deferRendering && '[content-visibility:auto] [contain-intrinsic-size:auto_164px] lg:[contain-intrinsic-size:auto_80px] focus-within:[content-visibility:visible]',
       kmoe.state === 'ignored' && 'bg-muted/30')}>
     <div className="flex min-w-0 items-start gap-3">
       <Folder aria-hidden className={cn('mt-0.5 size-4 shrink-0', kmoe.state === 'ignored' ? 'text-muted-foreground/60' : 'text-muted-foreground')} />
@@ -187,9 +190,9 @@ export const FolderRow = memo(function FolderRow({ folder, index, pending, busy,
       {komga && <>
         <dt className="text-muted-foreground">Komga</dt>
         <dd className="min-w-0"><KomgaLine folder={folder} /></dd>
-        <dd className="-my-1">{syncable && <Button variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label={`同步「${folder.name}」到 Komga`} aria-disabled={!!pending}
+        <dd className="-my-1">{syncable && <Button variant="ghost" size={metadata.komga.state === 'error' ? 'xs' : 'icon-xs'} className="text-muted-foreground pointer-coarse:min-h-11 pointer-coarse:min-w-11" aria-label={`${metadata.komga.state === 'error' ? '重试同步' : '同步'}「${folder.name}」到 Komga`} aria-disabled={!!pending}
           onClick={() => { if (!pending) handlers.act({ folder, action: 'sync' }); }}>
-          <RefreshCw className={cn(pending === 'sync' && 'animate-spin')} />
+          <RefreshCw className={cn(pending === 'sync' && 'animate-spin')} />{metadata.komga.state === 'error' && '重试'}
         </Button>}</dd>
       </>}
     </dl>}

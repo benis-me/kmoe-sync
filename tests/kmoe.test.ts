@@ -138,6 +138,34 @@ describe('site operations against the fake mirror', () => {
     } finally { resetKmoeThrottle(); }
   });
 
+  it('rechecks cooldown and cancellation after waiting for the request slot', async () => {
+    resetKmoeThrottle(); resetKmoePacing();
+    const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+    const calls: string[] = [];
+    const client = new KmoeClient({ origin: fake.origin, interval: 80, fetch: (async input => {
+      const path = new URL(String(input)).pathname;
+      calls.push(path);
+      if (path === '/first') { entered.resolve(); await release.promise; return new Response(null, { status: 302, headers: { Location: 'https://www.google.com/' } }); }
+      return new Response('ok');
+    }) as typeof fetch });
+    try {
+      const first = code(client.get('/first'));
+      await entered.promise;
+      const queued = code(client.get('/queued'));
+      release.resolve();
+      expect(await first).toBe('rate_limited');
+      expect(await queued).toBe('rate_limited');
+      expect(calls).toEqual(['/first']);
+      resetKmoeThrottle();
+      const controller = new AbortController();
+      const cancelled = client.get('/cancelled', { signal: controller.signal }).catch(error => error);
+      controller.abort();
+      expect(await cancelled).toMatchObject({ name: 'AbortError' });
+      expect(calls).toEqual(['/first']);
+      expect((await client.get('/recovered')).text).toBe('ok');
+    } finally { release.resolve(); resetKmoeThrottle(); resetKmoePacing(); }
+  });
+
   it('a cooldown is saved when it starts and restored after a restart', async () => {
     resetKmoeThrottle(1 / 6000);
     const saved: ThrottleState[] = [];

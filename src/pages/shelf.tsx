@@ -113,7 +113,7 @@ export function ShelfPage() {
           </EmptyState>
           : <div role="status" aria-live="polite" className="sr-only">{q || filter !== 'all' ? `找到 ${visible.length} 部` : ''}</div>}
         {!!visible.length && <ul aria-label="漫画列表" className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-x-5 gap-y-7 max-sm:grid-cols-3 max-sm:gap-x-3 max-sm:gap-y-5">
-          {visible.map((entry, index) => <li key={entry.comic.key} className="min-w-0"><ComicCard entry={entry} index={index} /></li>)}
+          {visible.map((entry, index) => <li key={entry.comic.key} className={cn('min-w-0', visible.length > 60 && '[content-visibility:auto] [contain-intrinsic-size:auto_260px] hover:[content-visibility:visible] focus-within:[content-visibility:visible]')}><ComicCard entry={entry} index={index} /></li>)}
         </ul>}
       </section>
       <ActivityFeed className={cn('xl:sticky xl:top-8', entries?.length === 0 && 'max-w-2xl')} />

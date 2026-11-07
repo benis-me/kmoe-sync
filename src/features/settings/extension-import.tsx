@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { CircleAlert, FileJson, LoaderCircle, Upload, X } from 'lucide-react';
 import { formatBytes } from '@shared/naming';
 import { errorMessage, request } from '@/lib/api';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import { Button } from '@/components/ui/button';
 import { Card, CardFooter } from '@/components/ui/card';
 
@@ -27,11 +28,12 @@ export function ExtensionImport() {
   const input = useRef<HTMLInputElement>(null);
   const zone = useRef<HTMLButtonElement>(null);
   const [staged, setStaged] = useState<Staged | null>(null);
+  useUnsavedChanges(!!staged?.config);
   const [drag, setDrag] = useState(false);
   const run = useMutation({
     mutationFn: (config: unknown) => request('POST /api/import/extension', { body: { config } }),
-    onSuccess: result => {
-      unstage();
+    onSuccess: (result, config) => {
+      setStaged(current => current?.config === config ? null : current);
       for (const queryKey of [['targets'], ['status'], ['settings']]) void client.invalidateQueries({ queryKey });
       toast.success(result.targets ? `已导入 ${result.targets} 个存储位置` : '没有新的存储位置', { description: result.rule ? '命名规则已一并导入。' : undefined });
     },

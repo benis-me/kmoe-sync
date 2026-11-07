@@ -8,6 +8,8 @@ import { LoaderCircle } from 'lucide-react';
 import type { AiProvider, AiSettings, AiSettingsPatch, AiTestResult } from '@shared/model';
 import { errorMessage, request } from '@/lib/api';
 import { aiSettingsQuery, settingsQuery } from '@/lib/queries';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import { useSettingsDraft } from './use-settings-draft';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -28,13 +30,10 @@ const formatTokens = (n: number) => n >= 10_000 ? `${(n / 10_000).toFixed(1).rep
 function AiForm({ ai, proxy }: { ai: AiSettings; proxy: string }) {
   const client = useQueryClient();
   const initial = { provider: ai.provider, baseUrl: ai.baseUrl, model: ai.model, useProxy: ai.useProxy, monthlyTokens: String(ai.monthlyTokens || ''), apiKey: '' };
-  const initialKey = JSON.stringify(initial);
-  const [draft, setDraft] = useState(initial);
-  const [base, setBase] = useState(initialKey);
-  if (base !== initialKey) { setBase(initialKey); setDraft(initial); }
+  const { draft, setDraft, dirty, saved } = useSettingsDraft(initial);
+  useUnsavedChanges(dirty);
   const [error, setError] = useState<Partial<Record<'baseUrl' | 'monthlyTokens', string>>>({});
   const [tested, setTested] = useState<{ key: string; result: AiTestResult } | null>(null);
-  const dirty = JSON.stringify(draft) !== initialKey;
   const set = <K extends keyof typeof initial>(field: K, value: (typeof initial)[K]) => {
     setDraft(old => ({ ...old, [field]: value }));
     if (field === 'baseUrl' || field === 'monthlyTokens') setError(old => ({ ...old, [field]: undefined }));
@@ -70,7 +69,7 @@ function AiForm({ ai, proxy }: { ai: AiSettings; proxy: string }) {
   function submit(e: FormEvent) {
     e.preventDefault();
     const body = patch();
-    if (dirty && body && !save.isPending) save.mutate(body);
+    if (dirty && body && !save.isPending) save.mutate(body, { onSuccess: next => saved(draft, { provider: next.provider, baseUrl: next.baseUrl, model: next.model, useProxy: next.useProxy, monthlyTokens: String(next.monthlyTokens || ''), apiKey: '' }) });
   }
   const result = tested?.key === testKey ? tested.result : null;
   const preset = PRESETS[draft.provider];
@@ -136,7 +135,7 @@ function AiForm({ ai, proxy }: { ai: AiSettings; proxy: string }) {
 export function AiSection() {
   const ai = useQuery(aiSettingsQuery);
   const { data: proxy = '' } = useQuery({ ...settingsQuery, select: settings => settings.proxy });
-  if (ai.error) return <ErrorState error={ai.error} onRetry={() => void ai.refetch()} />;
+  if (ai.error && !ai.data) return <ErrorState error={ai.error} onRetry={() => void ai.refetch()} />;
   if (!ai.data) return <SectionSkeleton />;
   return <>
     <AiForm ai={ai.data} proxy={proxy} />

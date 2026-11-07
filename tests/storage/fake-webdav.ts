@@ -1,4 +1,4 @@
-// In-memory WebDAV server for storage tests: PROPFIND (Depth 0/1), MKCOL, PUT (If-None-Match), MOVE (files, Overwrite), GET,
+// In-memory WebDAV server for storage tests: PROPFIND (Depth 0/1), MKCOL, PUT (If-None-Match), MOVE (files, Overwrite), DELETE, GET,
 // optional Basic auth.
 // Three multistatus dialects: "d:" prefixes, Apache-style mixed prefixes with a 404 propstat, and a default namespace with
 // absolute-URL hrefs and numeric character references.
@@ -86,6 +86,10 @@ export function startFakeDav(options: { auth?: { username: string; password: str
           tree.set(destination, entry);
           return new Response('', { status: exists ? 204 : 201 });
         }
+        case 'DELETE':
+          if (!entry) return new Response('', { status: 404 });
+          tree.delete(path);
+          return new Response(null, { status: 204 });
         case 'GET':
           return entry && !entry.dir ? new Response(entry.bytes ?? new Uint8Array(entry.size)) : new Response('', { status: 404 });
       }

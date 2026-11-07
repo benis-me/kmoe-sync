@@ -8,6 +8,8 @@ import { TargetInput, type Target, type TargetKind } from '@shared/model';
 import { DEFAULT_RULE, NamingError, normalizePath, validateRule } from '@shared/naming';
 import { errorMessage, request } from '@/lib/api';
 import { fieldErrors, type FieldErrors } from '@/lib/forms';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import { useSettingsDraft } from './use-settings-draft';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -63,17 +65,14 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
 }) {
   const client = useQueryClient();
   const initial = draftOf(target);
-  const initialKey = JSON.stringify(initial);
-  const [draft, setDraft] = useState(initial);
-  const [base, setBase] = useState(initialKey);
-  // The saved target changed (saved here, or elsewhere): start from it again.
-  if (base !== initialKey) { setBase(initialKey); setDraft(initial); }
+  const { draft, setDraft, dirty: changed, saved: acceptSaved } = useSettingsDraft(initial);
+  useUnsavedChanges(!target || changed);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [connection, setConnection] = useState<Connection>({ state: 'idle' });
   const [browse, setBrowse] = useState<BrowseTarget | null>(null);
   const attempt = useRef(0);
   const id = target ? `target-${target.id}` : 'target-new';
-  const dirty = !target || JSON.stringify(draft) !== initialKey;
+  const dirty = !target || changed;
   const webdav = draft.kind === 'webdav';
 
   const update = <K extends keyof Draft>(field: K, value: Draft[K]) => {
@@ -89,8 +88,9 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
   const refresh = () => Promise.all([client.invalidateQueries({ queryKey: ['targets'] }), client.invalidateQueries({ queryKey: ['status'] }), client.invalidateQueries({ queryKey: ['settings'] })]);
 
   const save = useMutation({
-    mutationFn: () => target ? request('PATCH /api/targets/:id', { params: { id: target.id }, body: inputOf(draft) }) : request('POST /api/targets', { body: inputOf(draft) }),
-    onSuccess: saved => { setDraft(draftOf(saved)); void refresh(); toast.success(target ? '已保存' : `已添加「${saved.name}」`); onSaved?.(saved); },
+    scope: { id: `target:${target?.id ?? 'new'}` },
+    mutationFn: (value: Draft) => target ? request('PATCH /api/targets/:id', { params: { id: target.id }, body: inputOf(value) }) : request('POST /api/targets', { body: inputOf(value) }),
+    onSuccess: (saved, submitted) => { acceptSaved(submitted, draftOf(saved)); void refresh(); toast.success(target ? '已保存' : `已添加「${saved.name}」`); onSaved?.(saved); },
   });
   const test = useMutation({
     mutationFn: () => request('POST /api/targets/test', { body: ref() }),
@@ -109,6 +109,7 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
     },
   });
   const makeDefault = useMutation({
+    scope: { id: 'settings' },
     mutationFn: () => request('POST /api/targets/:id/default', { params: { id: target!.id } }),
     onSuccess: () => { void refresh(); toast.success(`「${target!.name}」已设为默认`); },
   });
@@ -122,7 +123,7 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
   }
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!save.isPending && dirty && check()) save.mutate();
+    if (!save.isPending && dirty && check()) save.mutate(draft);
   }
   function openBrowser(opener: HTMLElement) {
     if (!check(probe)) return;
@@ -135,7 +136,7 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
   const error = (field: keyof Draft) => errors[field] ? { 'aria-invalid': true, 'aria-describedby': `${id}-${field}-error` } : {};
 
   return <form noValidate onSubmit={submit} aria-label={target ? `编辑 ${target.name}` : '新的存储位置'} className="flex flex-col">
-    <div className="flex flex-col gap-6 p-5 sm:p-6">
+    <fieldset disabled={!target && save.isPending} className="flex min-w-0 flex-col gap-6 p-5 sm:p-6">
       {/* A saved target keeps its kind (its files live there); the kind shows in the row header. */}
       <div className={cn('grid gap-5', !target && 'sm:grid-cols-[minmax(0,1fr)_auto]')}>
         <Field className="gap-2">
@@ -185,7 +186,7 @@ export function TargetEditor({ target, libraryRoot, onSaved, onDiscard }: {
       <Separator />
       <RuleEditor id={`${id}-rule`} value={draft.rule} onChange={value => update('rule', value)} base={webdav ? `${hostOf(draft.url) || 'WebDAV'}${draft.path === '/' ? '' : draft.path}` : `${libraryRoot}${draft.path === '/' ? '' : draft.path}`} />
       <ConnectionStatus id={`${id}-status`} connection={connection} />
-    </div>
+    </fieldset>
 
     <div className="flex flex-wrap items-center gap-2 border-t bg-muted/35 px-5 py-3.5 sm:px-6">
       {!target ? <Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={onDiscard}>放弃</Button>

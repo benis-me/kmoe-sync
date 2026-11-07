@@ -416,7 +416,14 @@ describe('WebDAV target', () => {
     const files = async () => (await (await fetch(`${fake.origin}/__fake/state`)).json() as { fileRequests: number }).fileRequests;
     const before = await files();
     let failed = false;
-    dav.state.override = req => { if (req.method === 'PUT' && !failed) { failed = true; return new Response('busy', { status: 500 }); } };
+    dav.state.override = async (req, path) => {
+      if (req.method === 'PUT' && !failed) {
+        failed = true;
+        await req.arrayBuffer();
+        dav.tree.set(path, { dir: false, size: 3 });
+        return new Response('busy', { status: 500 });
+      }
+    };
     try {
       await api('POST', '/api/tasks', { comicKey: 'c9d0e1', itemIds: ['5003'], format: 'epub', targetId });
       const task = (await until(() => tasksOf('c9d0e1'), list => settled(list.filter(item => item.itemId === '5003')))).find(item => item.itemId === '5003')!;

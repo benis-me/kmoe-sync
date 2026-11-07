@@ -136,6 +136,12 @@ describe('put', () => {
     expect(put.headers.get('content-length')).toBe(String(bytes.length));
     expect(put.headers.get('transfer-encoding')).toBeNull();
     expect(put.headers.get('connection')).toBe('close');
+    expect(put.path).toMatch(/^\/dav\/Comics\/渣女沒渣報\/\.kmoesync-[\w-]+\.part$/);
+    const moved = dav.requests.find(request => request.method === 'MOVE')!;
+    expect(moved.path).toBe(put.path);
+    expect(moved.headers.get('overwrite')).toBe('F');
+    expect(decodeURIComponent(new URL(moved.headers.get('destination')!).pathname)).toBe(remote);
+    expect(dav.tree.has(put.path)).toBe(false);
     const download = await fetch(`${dav.url}/Comics/${encodeURIComponent('渣女沒渣報')}/${encodeURIComponent('[Kmoe][渣女沒渣報]卷01.epub')}`, { headers: { Authorization: put.headers.get('authorization')! } });
     expect(Buffer.from(await download.arrayBuffer()).equals(Buffer.from(bytes))).toBe(true);
     expect(progress.at(-1)).toEqual([bytes.length, bytes.length]);
@@ -161,14 +167,78 @@ describe('put', () => {
     expect(await failure(target().put('/书/a.epub', source('e.part', new Uint8Array(5)), signal()))).toMatchObject({ code: 'conflict' });
   });
 
-  it('fails when the stored size does not match', async () => {
+  it('cleans up a size mismatch without publishing the partial file', async () => {
     dav.state.override = async (request, path) => {
       if (request.method !== 'PUT') return;
       await request.arrayBuffer();
       dav.tree.set(path, { dir: false, size: 1 });
       return new Response('', { status: 201 });
     };
-    expect(await failure(target().put('/x.epub', source('f.part', new Uint8Array(10)), signal()))).toMatchObject({ code: 'io', message: expect.stringContaining('核验') });
+    expect(await failure(target().put('/x.epub', source('f.part', new Uint8Array(10)), signal()))).toMatchObject({ code: 'io', retryable: true, message: expect.stringContaining('核验') });
+    expect(dav.tree.has('/dav/Comics/x.epub')).toBe(false);
+    expect(dav.requests.some(request => request.method === 'MOVE')).toBe(false);
+    const uploaded = dav.requests.find(request => request.method === 'PUT')!.path;
+    expect(dav.requests.filter(request => request.method === 'DELETE').map(request => request.path)).toEqual([uploaded]);
+    expect(dav.tree.has(uploaded)).toBe(false);
+  });
+
+  it('retries a partial PUT without touching other files, even when cleanup fails', async () => {
+    const file = source('partial.part', new Uint8Array([1, 2, 3, 4]));
+    dav.seed({ '/dav/Comics/.kmoesync-other.part': 8, '/dav/Comics/user.epub': 9 });
+    let failed = false;
+    dav.state.override = async (request, path) => {
+      if (request.method === 'DELETE') return new Response('', { status: 503 });
+      if (request.method === 'PUT' && !failed) {
+        failed = true;
+        await request.arrayBuffer();
+        dav.tree.set(path, { dir: false, size: 1 });
+        return new Response('', { status: 500 });
+      }
+    };
+    expect(await failure(target().put('/retry.epub', file, signal()))).toMatchObject({ code: 'network' });
+    expect(dav.tree.has('/dav/Comics/retry.epub')).toBe(false);
+    const partial = dav.requests.find(request => request.method === 'PUT')!.path;
+    expect(dav.requests.filter(request => request.method === 'DELETE').map(request => request.path)).toEqual([partial]);
+    dav.state.override = undefined;
+    expect(await target().put('/retry.epub', file, signal())).toBe('stored');
+    expect(new Set(dav.requests.filter(request => request.method === 'PUT').map(request => request.path)).size).toBe(2);
+    expect(dav.tree.get('/dav/Comics/retry.epub')).toMatchObject({ size: 4, bytes: new Uint8Array([1, 2, 3, 4]) });
+    expect(dav.tree.get('/dav/Comics/.kmoesync-other.part')).toMatchObject({ size: 8 });
+    expect(dav.tree.get('/dav/Comics/user.epub')).toMatchObject({ size: 9 });
+    expect(dav.tree.get(partial)).toMatchObject({ size: 1 });
+  });
+
+  it('settles a MOVE race by size and deletes only its own temporary object', async () => {
+    const file = source('race.part', new Uint8Array(4));
+    for (const size of [4, 5]) {
+      dav.tree.delete('/dav/Comics/race.epub');
+      dav.requests.length = 0;
+      dav.state.override = request => {
+        if (request.method === 'MOVE') dav.tree.set('/dav/Comics/race.epub', { dir: false, size });
+      };
+      const pending = target().put('/race.epub', file, signal());
+      if (size === 4) expect(await pending).toBe('exists');
+      else expect(await failure(pending)).toMatchObject({ code: 'conflict' });
+      expect(dav.tree.get('/dav/Comics/race.epub')).toMatchObject({ size });
+      const put = dav.requests.find(request => request.method === 'PUT')!;
+      expect(dav.requests.filter(request => request.method === 'DELETE').map(request => request.path)).toEqual([put.path]);
+      expect(dav.tree.has(put.path)).toBe(false);
+    }
+  });
+
+  it('keeps a published file when the MOVE response fails and accepts it on retry', async () => {
+    const file = source('published.part', new Uint8Array(4));
+    dav.state.override = (request, path) => {
+      if (request.method !== 'MOVE') return;
+      dav.tree.set('/dav/Comics/published.epub', dav.tree.get(path)!);
+      dav.tree.delete(path);
+      return new Response('', { status: 500 });
+    };
+    expect(await failure(target().put('/published.epub', file, signal()))).toMatchObject({ code: 'network' });
+    expect(dav.tree.get('/dav/Comics/published.epub')).toMatchObject({ size: 4 });
+    expect(await target().put('/published.epub', file, signal())).toBe('exists');
+    expect(dav.requests.filter(request => request.method === 'PUT')).toHaveLength(1);
+    expect(dav.requests.filter(request => request.method === 'DELETE').every(request => request.path.includes('/.kmoesync-'))).toBe(true);
   });
 
   it('gives up only after silence, and stops when cancelled', async () => {
@@ -181,8 +251,17 @@ describe('put', () => {
     } finally { Object.assign(timeouts, saved); }
 
     const controller = new AbortController();
-    dav.state.override = request => { if (request.method === 'PUT') { controller.abort(); return new Promise<Response>(() => {}); } };
+    dav.state.override = async (request, path) => {
+      if (request.method === 'PUT') {
+        await request.arrayBuffer();
+        dav.tree.set(path, { dir: false, size: 1 });
+        controller.abort();
+        return new Promise<Response>(() => {});
+      }
+    };
     expect(await failure(target().put('/cancel.epub', source('h.part', new Uint8Array(10)), { signal: controller.signal }))).toMatchObject({ name: 'AbortError' });
+    expect(dav.tree.has('/dav/Comics/cancel.epub')).toBe(false);
+    expect([...dav.tree.keys()].some(path => path.includes('/.kmoesync-'))).toBe(false);
     expect(await failure(target().put('/early.epub', source('i.part', new Uint8Array(10)), { signal: AbortSignal.abort() }))).toMatchObject({ name: 'AbortError' });
   });
 });

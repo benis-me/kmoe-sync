@@ -27,6 +27,51 @@ test('Bangumi collections: paging, type codes and title fallback', async () => {
   expect(fetchCollections('nobody', ['doing'], fake)).rejects.toThrow('找不到用户');
 });
 
+test('an oversized collection leaves the entire saved list and dismissed entries intact', async () => {
+  let ids = Array.from({ length: 2000 }, (_, i) => i + 1), calls = 0;
+  const fake = (async (input: string | URL | Request) => {
+    calls++;
+    const offset = Number(new URL(String(input)).searchParams.get('offset'));
+    return Response.json({ total: ids.length, data: ids.slice(offset, offset + 50).map(id => ({ subject_id: id, type: 1, subject: { id, name: `Manga ${id}` } })) });
+  }) as typeof fetch;
+  const db = openDatabase('', ':memory:'), hub = new EventHub();
+  const sources = new SourceService(db, hub, new ActivityLog(db, hub, new Notifier(() => [])), fake);
+  try {
+    const source = await sources.create({ name: 'Large', username: 'reader', types: ['wish'], enabled: true, intervalHours: 24 });
+    expect(source.itemCount).toBe(2000);
+    expect(calls).toBe(40);
+    const old = sources.items(source.id).find(item => item.externalId === '2000')!;
+    sources.setMatch(old.id, 'dismissed');
+    const before = sources.items(source.id);
+    ids = [2001, ...ids];
+    calls = 0;
+    await expect(sources.sync(source.id)).rejects.toThrow('超过 2000 项');
+    expect(calls).toBe(1);
+    expect(sources.get(source.id)).toMatchObject({ itemCount: 2000, error: expect.stringContaining('已保留原有条目') });
+    expect(sources.items(source.id)).toEqual(before);
+    ids = ids.slice(1);
+    await sources.sync(source.id);
+    expect(sources.items(source.id).find(item => item.externalId === '2000')?.match.state).toBe('dismissed');
+    expect(sources.get(source.id).error).toBeNull();
+  } finally { db.close(); }
+});
+
+test.each(['missing total', 'missing data', 'short page', 'changed total', 'repeated page'])(
+  'incomplete collections fail closed: %s', async failure => {
+    let calls = 0;
+    const fake = (async (_input: string | URL | Request) => {
+      const page = calls++;
+      const data = Array.from({ length: failure === 'short page' ? 1 : 50 }, (_, i) => ({ subject_id: failure === 'repeated page' ? i : page * 50 + i, type: 1 }));
+      return Response.json({
+        ...(failure === 'missing total' ? {} : { total: failure === 'changed total' && page ? 101 : 100 }),
+        ...(failure === 'missing data' ? {} : { data }),
+      });
+    }) as typeof fetch;
+    await expect(fetchCollections('reader', ['wish'], fake)).rejects.toThrow('已保留原有条目');
+    expect(calls).toBeLessThanOrEqual(2);
+  },
+);
+
 test('a reading list: a sync keeps matched entries that left the list, and due syncs never overlap', async () => {
   let ids = [1, 2, 3];
   let calls = 0;

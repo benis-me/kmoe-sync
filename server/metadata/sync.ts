@@ -9,7 +9,7 @@ import type { ItemRow } from '../services/comics';
 import {
   creators, infobox, subjectUrl, traditionalEdition, type BangumiApi, type BgmPerson, type BgmRelated, type BgmSubject,
 } from './bangumi';
-import { below, type KomgaClient, type KomgaLink } from './komga';
+import { below, type KomgaClient, type KomgaLink, type KomgaSeries } from './komga';
 import { fold, surname } from './text';
 
 export type Language = 'zh-Hant' | 'zh-Hans';
@@ -257,7 +257,7 @@ function remember(record: Record<string, string>, sent: Record<string, unknown>)
 // ---------- Writing to Komga ----------
 export interface SyncTools { komga: KomgaClient; bangumi: BangumiApi; fetch: typeof fetch; options: MetadataOptions; signal?: AbortSignal }
 export interface SeriesJob {
-  seriesId: string; subjectId: number; comic: ComicFacts | null; kmoeUrl: string | null;
+  series: KomgaSeries; subject: BgmSubject; persons: BgmPerson[]; related: BgmRelated[]; comic: ComicFacts | null; kmoeUrl: string | null;
   /** Komga library root, to turn book URLs into folder-relative paths. */
   root: string;
   /** Kmoe items by file path relative to the target (NFC). */
@@ -308,11 +308,7 @@ async function poster(kind: 'series' | 'books', id: string, subject: BgmSubject,
  */
 export async function syncSeries(job: SeriesJob, tools: SyncTools): Promise<{ subject: BgmSubject; volumes: number; books: Set<string> | null }> {
   const { komga, bangumi, options, signal } = tools;
-  const subject = await bangumi.subject(job.subjectId, signal);
-  if (!subject) throw new AppError(404, 'bangumi_missing', `无法读取 Bangumi 条目 ${job.subjectId}（条目已删除，或是 R18 条目而未设置 Access Token）`);
-  const persons = await bangumi.persons(subject.id, signal);
-  const related = await bangumi.related(subject.id, signal);
-  const series = await komga.series(job.seriesId, signal);
+  const { series, subject, persons, related } = job;
   const { written } = job, adopt = written.adopt === true;
   const patch = seriesPatch({ subject, persons, related, comic: job.comic, kmoeUrl: job.kmoeUrl, current: series.metadata, options, polish: job.polish });
   const body = changes(patch, series.metadata, own(written.series, patch, series.metadata, adopt));

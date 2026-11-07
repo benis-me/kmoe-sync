@@ -48,7 +48,7 @@ async function whole(path: string, format: Format): Promise<boolean> {
   return !checkSignature(new Uint8Array(await Bun.file(path).slice(0, 68).arrayBuffer()), format) && !(format === 'epub' && await isTruncatedZip(path));
 }
 
-interface Running { controller: AbortController; loaded: number; speed: number; lastAt: number; lastLoaded: number; persistedAt: number }
+interface Running { controller: AbortController; loaded: number; speed: number; lastAt: number; lastLoaded: number; persistedAt: number; reservedMB: number }
 
 export class Worker {
   private readonly running = new Map<number, Running>();
@@ -121,7 +121,7 @@ export class Worker {
       // Claim atomically: another instance on the same data must not start the same task.
       const claimed = db.run("UPDATE tasks SET status = 'running', phase = 'resolving', retry_at = NULL, started_at = COALESCE(started_at, ?), speed = 0 WHERE id = ? AND status = 'queued'", [now(), row.id]);
       if (!claimed.changes) continue;
-      const entry: Running = { controller: new AbortController(), loaded: 0, speed: 0, lastAt: Date.now(), lastLoaded: 0, persistedAt: 0 };
+      const entry: Running = { controller: new AbortController(), loaded: 0, speed: 0, lastAt: Date.now(), lastLoaded: 0, persistedAt: 0, reservedMB: 0 };
       this.running.set(row.id, entry);
       this.deps.tasks.emit(row.id);
       void this.run(row, entry)
@@ -158,13 +158,15 @@ export class Worker {
     if (free < need) throw new StorageError('no_space', `数据目录空间不足：剩余 ${formatBytes(free)}，暂存这一卷约需 ${formatBytes(need)}，请清理 /data 所在的磁盘`);
   }
 
-  private guardQuota(item: ItemRow, format: Format) {
+  private reserveQuota(entry: Running, sizeMB: number) {
     const account = this.deps.kmoe.account();
     const reserve = this.deps.settings.get().quotaReserveMB;
-    if (account.state !== 'active' || account.remainingMB === null) return;
-    if (account.remainingMB - itemSize(item, format) < reserve) {
-      throw new Paused('quota', `Kmoe 剩余额度约 ${Math.round(account.remainingMB)} MB，已低于保留额度 ${reserve} MB`);
+    let pending = 0;
+    for (const task of this.running.values()) pending += task.reservedMB;
+    if (account.state === 'active' && account.remainingMB !== null && account.remainingMB - pending - sizeMB < reserve) {
+      throw new Paused('quota', `Kmoe 可用额度约 ${Math.round(Math.max(0, account.remainingMB - pending))} MB，下载后将低于保留额度 ${reserve} MB`);
     }
+    entry.reservedMB = sizeMB;
   }
 
   private async run(task: TaskRow, entry: Running) {
@@ -185,12 +187,18 @@ export class Worker {
       let relative = staged ? task.path!.replace(/^\//, '') : '';
       let download = { size: task.total ?? 0 };
       if (!staged) {
-        this.guardQuota(item, task.format);
-        await this.ensureSpace(itemSize(item, task.format));
+        const sizeMB = itemSize(item, task.format);
+        await this.ensureSpace(sizeMB);
+        signal.throwIfAborted();
         let link = this.links.get(task.id);
         if (!link) {
-          link = await kmoe.withSession(site => site.downloadLink({ key: comic.key, bookId: comic.book_id ?? '', itemId: item.remote_id, format: task.format, line: task.line }));
-          this.links.set(task.id, link);
+          // Kmoe charges when issuing a link. Reserve synchronously before yielding to another task.
+          this.reserveQuota(entry, sizeMB);
+          try {
+            link = await kmoe.withSession(site => site.downloadLink({ key: comic.key, bookId: comic.book_id ?? '', itemId: item.remote_id, format: task.format, line: task.line }));
+            kmoe.recordUsage(sizeMB);
+            this.links.set(task.id, link);
+          } finally { entry.reservedMB = 0; }
         }
         signal.throwIfAborted();
         mkdirSync(scratch, { recursive: true });
@@ -227,7 +235,6 @@ export class Worker {
         db.run(`UPDATE tasks SET status = 'completed', phase = NULL, loaded = ?, total = ?, speed = 0, path = ?, error = ?, error_code = NULL, finished_at = ? WHERE id = ?`,
           [download.size, download.size, path, outcome === 'exists' ? '目标位置已有同样大小的文件，未覆盖' : null, now(), task.id]);
       })();
-      kmoe.recordUsage(download.size / 1024 / 1024);
       tasks.emit(task.id);
       try { this.deps.library.recordDelivery(comic.id, task.target_id, path); } catch (error) { console.error(`[task ${task.id}] library folder`, error); }
       this.deps.activity.add({

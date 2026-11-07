@@ -8,6 +8,8 @@ import { HardDrive, LoaderCircle, Server } from 'lucide-react';
 import type { KomgaLibrary, MetadataOptions, MetadataSettings, Target } from '@shared/model';
 import { errorMessage, request } from '@/lib/api';
 import { metadataSettingsQuery, targetsQuery } from '@/lib/queries';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import { useSettingsDraft } from './use-settings-draft';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -31,15 +33,12 @@ const draftOf = (s: MetadataSettings): Draft => ({
 function ConnectionCard({ settings, targets }: { settings: MetadataSettings; targets: Target[] }) {
   const patch = usePatchMetadata();
   const initial = draftOf(settings);
-  const initialKey = JSON.stringify(initial);
-  const [draft, setDraft] = useState(initial);
-  const [base, setBase] = useState(initialKey);
-  if (base !== initialKey) { setBase(initialKey); setDraft(initial); }
+  const { draft, setDraft, dirty, saved } = useSettingsDraft(initial);
+  useUnsavedChanges(dirty);
   const [errors, setErrors] = useState<Partial<Record<'url' | 'username' | 'secret', string>>>({});
   const [connection, setConnection] = useState<Connection>({ state: 'idle' });
   const [libraries, setLibraries] = useState<KomgaLibrary[] | null>(null);
   const attempt = useRef(0);
-  const dirty = JSON.stringify(draft) !== initialKey;
   const basic = draft.auth === 'basic';
   // A stored secret belongs to the saved auth mode: switching modes needs a new one.
   const keeps = settings.komga.hasSecret && draft.auth === settings.komga.auth;
@@ -84,9 +83,9 @@ function ConnectionCard({ settings, targets }: { settings: MetadataSettings; tar
     e.preventDefault();
     if (!dirty || patch.isPending || !validate()) return;
     const mapped = targets.flatMap(t => draft.libraries[t.id] ? [{ targetId: t.id, libraryId: draft.libraries[t.id]! }] : []);
-    patch.mutate({ komga: { ...komgaDraft(), libraries: mapped } }, { onSuccess: () => void toast.success('已保存 Komga 连接') });
+    patch.mutate({ komga: { ...komgaDraft(), libraries: mapped } }, { onSuccess: next => { saved(draft, draftOf(next)); toast.success('已保存 Komga 连接'); } });
   }
-  const clearSecret = () => patch.mutate({ komga: { secret: '' } }, { onSuccess: () => void toast.success('已清除') });
+  const clearSecret = () => { if (!patch.isPending) patch.mutate({ komga: { secret: '' } }, { onSuccess: () => void toast.success('已清除') }); };
   const error = (field: keyof typeof errors) => errors[field] ? { 'aria-invalid': true, 'aria-describedby': `komga-${field}-error` } : {};
 
   return <form noValidate onSubmit={submit} aria-label="Komga 连接" className="overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
@@ -118,7 +117,7 @@ function ConnectionCard({ settings, targets }: { settings: MetadataSettings; tar
               value={draft.secret} onChange={e => set('secret', e.target.value)} {...error('secret')} />
             {settings.komga.hasSecret && <ConfirmAction title={`清除已保存的${settings.komga.auth === 'basic' ? '密码' : ' API Key'}？`} description="清除后无法连接 Komga，直到重新填写。" action="清除"
               onConfirm={clearSecret}>
-              <Button type="button" variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-destructive">清除</Button>
+              <Button type="button" variant="ghost" size="sm" disabled={patch.isPending} className="shrink-0 text-muted-foreground hover:text-destructive">清除</Button>
             </ConfirmAction>}
           </div>
           <FieldMessage id="komga-secret-error">{errors.secret}</FieldMessage>
@@ -246,7 +245,7 @@ export function MetadataSection() {
   const ready = !!settings.data && !!targets.data;
   // Arriving from a 「数据来源」 hint (书库, 漫画页): go straight to the card.
   useEffect(() => { if (ready && hash === 'bangumi-source') document.getElementById('bangumi-source')?.scrollIntoView({ block: 'start' }); }, [ready, hash]);
-  if (settings.error) return <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />;
+  if (settings.error && !settings.data) return <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />;
   if (!settings.data || !targets.data) return <SectionSkeleton />;
   const s = settings.data;
   return <>

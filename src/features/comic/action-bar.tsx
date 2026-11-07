@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { Download, LoaderCircle, X } from 'lucide-react';
 import { cn } from 'cn';
-import type { Task } from '@shared/model';
-import { formatDuration, formatMB, formatSpeed } from '@/lib/format';
+import type { Format, Task } from '@shared/model';
+import { FORMAT_LABELS, formatDuration, formatMB, formatSpeed } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 
 export type ComicProgress = { current: Task | undefined; running: number; queued: number; speed: number };
@@ -19,7 +19,9 @@ function progressText({ current, running, queued, speed }: ComicProgress) {
 }
 
 /** Selection summary, quota, this comic's live progress and the page's one primary action. */
-export function ActionBar({ count, sizeMB, remainingMB, reserveMB, reason, busy, progress, onClear, onStart }: {
+export function ActionBar({ count, sizeMB, remainingMB, reserveMB, reason, busy, progress, targetName, format, onClear, onStart }: {
+  targetName: string | null;
+  format: Format;
   count: number;
   sizeMB: number;
   remainingMB: number | null;
@@ -56,6 +58,9 @@ export function ActionBar({ count, sizeMB, remainingMB, reserveMB, reason, busy,
               <span className="truncate text-muted-foreground tabular-nums">· {formatMB(sizeMB)}</span>
               <Button variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label="清除选择" onClick={onClear}><X /></Button>
             </> : <span className="text-muted-foreground">未选择章节</span>}
+          </div>
+          <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground sm:hidden">
+            <span className="truncate">{targetName ?? '未选择存储位置'}</span><span className="shrink-0">· {FORMAT_LABELS[format]}</span>
           </div>
           {/* Phones have no room for the reason beside the button: with chapters picked and no quota line (Kmoe not logged in), it goes here. */}
           {remainingMB !== null ? <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">

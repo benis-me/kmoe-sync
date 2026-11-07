@@ -118,11 +118,11 @@ export class TaskService {
     } else throw new AppError(409, 'task_finished', '任务已经结束');
   }
 
-  /** Cancels queued tasks (not running ones) matching a filter; used by subscription changes. */
-  cancelQueued(ids: number[]): number {
+  /** Policy changes stop pending work without excluding it from future subscriptions. */
+  cancelQueued(ids: number[], reason: 'user' | 'policy' = 'user'): number {
     let cancelled = 0;
     for (const id of ids) {
-      const result = this.db.run("UPDATE tasks SET status = 'cancelled', phase = NULL, retry_at = NULL, finished_at = ? WHERE id = ? AND status = 'queued'", [now(), id]);
+      const result = this.db.run("UPDATE tasks SET status = 'cancelled', phase = NULL, retry_at = NULL, error_code = ?, finished_at = ? WHERE id = ? AND status = 'queued'", [reason === 'policy' ? 'policy_cancelled' : null, now(), id]);
       if (result.changes) { cancelled++; this.emit(id, false); }
     }
     return cancelled;

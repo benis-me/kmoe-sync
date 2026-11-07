@@ -8,6 +8,7 @@ import { endpoints } from '@shared/api';
 import { errorMessage, request, setCsrf } from '@/lib/api';
 import { fieldErrors, type FieldErrors } from '@/lib/forms';
 import { authQuery } from '@/lib/queries';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import { Button } from '@/components/ui/button';
 import { Card, CardFooter } from '@/components/ui/card';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -15,6 +16,7 @@ import { FieldMessage, PasswordInput } from '@/components/app/fields';
 
 function PasswordCard() {
   const [form, setForm] = useState({ current: '', next: '', confirm: '' });
+  useUnsavedChanges(Object.values(form).some(Boolean));
   const [errors, setErrors] = useState<FieldErrors>({});
   const change = useMutation({
     mutationFn: () => request('POST /api/auth/password', { body: { current: form.current, next: form.next } }),
@@ -36,7 +38,7 @@ function PasswordCard() {
   }
   const field = (name: keyof typeof form, label: string, autoComplete: string) => <Field className="gap-2">
     <FieldLabel htmlFor={`password-${name}`}>{label}</FieldLabel>
-    <PasswordInput id={`password-${name}`} autoComplete={autoComplete} value={form[name]} onChange={e => set(name, e.target.value)}
+    <PasswordInput id={`password-${name}`} autoComplete={autoComplete} disabled={change.isPending} value={form[name]} onChange={e => set(name, e.target.value)}
       aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `password-${name}-error` : undefined} />
     <FieldMessage id={`password-${name}-error`}>{errors[name]}</FieldMessage>
   </Field>;

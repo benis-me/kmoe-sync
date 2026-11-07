@@ -1,5 +1,5 @@
 // Code-based route tree. The auth gate reads GET /api/auth/state once (cached) and routes to setup, login or the app.
-import { Link, Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useRouter } from '@tanstack/react-router';
+import { Link, Outlet, createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, redirect, useRouter } from '@tanstack/react-router';
 import { QueryCache, QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -13,12 +13,16 @@ import { EmptyState, ErrorState } from '@/components/app/feedback';
 import { Shell } from '@/components/app/shell';
 import { SetupPage, LoginPage } from '@/pages/auth';
 import { ShelfPage } from '@/pages/shelf';
-import { DiscoverLayout, SearchPage } from '@/pages/discover';
-import { BangumiPage } from '@/pages/bangumi';
-import { ComicPage } from '@/pages/comic';
-import { LibraryPage } from '@/pages/library';
-import { DownloadsPage } from '@/pages/downloads';
-import { SettingsLayout, SettingsSectionPage, isSection } from '@/pages/settings';
+
+// Keep the shelf ready; the other screens load on navigation or intent preloading.
+const DiscoverLayout = lazyRouteComponent(() => import('@/pages/discover'), 'DiscoverLayout');
+const SearchPage = lazyRouteComponent(() => import('@/pages/discover'), 'SearchPage');
+const BangumiPage = lazyRouteComponent(() => import('@/pages/bangumi'), 'BangumiPage');
+const ComicPage = lazyRouteComponent(() => import('@/pages/comic'), 'ComicPage');
+const LibraryPage = lazyRouteComponent(() => import('@/pages/library'), 'LibraryPage');
+const DownloadsPage = lazyRouteComponent(() => import('@/pages/downloads'), 'DownloadsPage');
+const SettingsLayout = lazyRouteComponent(() => import('@/pages/settings'), 'SettingsLayout');
+const SettingsSectionPage = lazyRouteComponent(() => import('@/pages/settings'), 'SettingsSectionPage');
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -119,7 +123,10 @@ const settingsIndexRoute = createRoute({
 });
 const sectionRoute = createRoute({
   getParentRoute: () => settingsRoute, path: '$section', component: SettingsSectionPage,
-  beforeLoad: ({ params }) => { if (!isSection(params.section)) throw redirect({ to: '/settings/$section', params: { section: 'account' }, replace: true }); },
+  beforeLoad: async ({ params }) => {
+    const { isSection } = await import('@/pages/settings');
+    if (!isSection(params.section)) throw redirect({ to: '/settings/$section', params: { section: 'account' }, replace: true });
+  },
 });
 
 const routeTree = rootRoute.addChildren([

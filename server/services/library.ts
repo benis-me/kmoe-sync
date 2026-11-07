@@ -16,7 +16,7 @@ import { inspectLibrary } from '../storage';
 import { StorageError } from '../storage/types';
 import type { MetadataService } from '../metadata/service';
 import type { ActivityLog } from './activity';
-import type { ComicService } from './comics';
+import type { ComicRow, ComicService } from './comics';
 import type { JobContext, JobRunner } from './jobs';
 import type { KmoeService } from './kmoe';
 import type { SettingsStore } from './settings';
@@ -142,12 +142,15 @@ export class LibraryService {
 
   private dtos(rows: FolderRow[]): LibraryFolder[] {
     const metadata = this.deps.metadata.forFolders(rows.map(row => row.id));
+    const ids = [...new Set(rows.flatMap(row => row.comic_id === null ? [] : [row.comic_id]))];
+    const comics = new Map((ids.length ? this.deps.db.query<ComicRow, [string]>('SELECT * FROM comics WHERE id IN (SELECT value FROM json_each(?))').all(JSON.stringify(ids)) : [])
+      .map(comic => [comic.id, this.deps.comics.summary(comic, true)]));
     return rows.map(row => {
-      const comic = row.comic_id ? this.deps.comics.byId(row.comic_id) : null;
+      const comic = row.comic_id === null ? null : comics.get(row.comic_id) ?? null;
       return {
         id: row.id, targetId: row.target_id, path: row.path, name: row.name, books: row.books, format: row.format, sample: row.sample, hint: row.hint,
         kmoe: {
-          state: row.kmoe_state, comic: comic ? this.deps.comics.summary(comic) : null, candidates: json<KmoeCandidate[]>(row.kmoe_candidates, []), score: row.kmoe_score,
+          state: row.kmoe_state, comic, candidates: json<KmoeCandidate[]>(row.kmoe_candidates, []), score: row.kmoe_score,
           error: row.kmoe_error, ai: json<AiVerdict | null>(row.kmoe_ai, null),
         },
         metadata: metadata.get(row.id)!,
@@ -216,7 +219,7 @@ export class LibraryService {
         [targetId, directory, basename(directory), dominantFormat([file]), basename(file), linked ? null : comicId, linked ? 'pending' : 'matched', linked ? null : 1, time, time]);
       row = this.rowAt(targetId, directory)!;
     } else {
-      const linkable = !row.comic_id && !this.rowOfComic(comicId, targetId);
+      const linkable = !row.comic_id && row.kmoe_state !== 'ignored' && !this.rowOfComic(comicId, targetId);
       db.run(`UPDATE library_folders SET books = books + 1, sample = COALESCE(sample, ?), format = COALESCE(format, ?), updated_at = ?
         ${linkable ? ", comic_id = ?, kmoe_state = 'matched', kmoe_score = 1, linked_by = 'download'" : ''} WHERE id = ?`,
         linkable ? [basename(file), dominantFormat([file]), time, comicId, row.id] : [basename(file), dominantFormat([file]), time, row.id]);
@@ -254,7 +257,7 @@ export class LibraryService {
       const [comicId, targetId] = key.split(':').map(Number) as [number, number];
       const [directory, files] = [...folders].sort((a, b) => b[1].length - a[1].length)[0]!;
       const existing = this.rowAt(targetId, directory);
-      if (existing?.comic_id) continue;
+      if (existing?.comic_id || existing?.kmoe_state === 'ignored') continue;
       const time = now();
       db.query(`INSERT INTO library_folders (target_id, path, name, books, format, sample, hint, comic_id, kmoe_state, kmoe_score, linked_by, created_at, updated_at)
         VALUES ($target, $path, $name, $books, $format, $sample, $hint, $comic, 'matched', 1, 'download', $now, $now)

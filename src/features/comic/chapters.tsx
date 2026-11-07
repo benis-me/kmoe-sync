@@ -153,7 +153,7 @@ function LibrarySummary({ items, states, library, checking, onCheck }: {
         </TooltipTrigger>
         <TooltipContent className="break-all">{library.directoryExists ? '已找到目录' : '目录不存在，下载时会自动创建'} · {library.directory}</TooltipContent>
       </Tooltip>}
-      <Button variant="ghost" size="xs" className="-mr-2 ml-auto text-muted-foreground" aria-disabled={checking} onClick={() => { if (!checking) onCheck(); }}>
+      <Button variant="ghost" size="xs" className="-mr-2 ml-auto text-muted-foreground pointer-coarse:min-h-11" aria-disabled={checking} onClick={() => { if (!checking) onCheck(); }}>
         {checking ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : library ? <RefreshCw data-icon="inline-start" /> : <FolderSearch data-icon="inline-start" />}
         {checking ? '检查中…' : library ? `重新检查 · ${fromNow(library.checkedAt)}` : '检查书库'}
       </Button>
@@ -251,7 +251,7 @@ export function Chapters({ comicKey, items, states, format, running, library, ch
         <span className="ml-auto hidden text-xs text-muted-foreground pointer-fine:2xl:inline">
           <kbd className="rounded border bg-card px-1 font-sans text-[11px]">Shift</kbd> 可连选
         </span>
-        <div className="-m-1 flex items-center gap-1 overflow-x-auto p-1 no-scrollbar edge-fade-x max-sm:w-full">
+        <div className="-m-1 flex items-center gap-1 overflow-x-auto p-1 no-scrollbar edge-fade-x max-sm:w-full pointer-coarse:[&>button]:min-h-11">
           {/* aria-disabled once done, so the focused button keeps keyboard focus instead of dropping it. */}
           <Button variant="ghost" size="sm" disabled={!selectable.length} aria-disabled={allSelected} onClick={() => { if (!allSelected) selectAll(); }}>
             <CheckCheck data-icon="inline-start" />全选可下载<span className="text-muted-foreground tabular-nums">{selectable.length}</span>

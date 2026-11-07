@@ -8,6 +8,8 @@ import { Channel, NOTIFY_LABELS, NotifyEvent, type Settings } from '@shared/mode
 import { errorMessage, request } from '@/lib/api';
 import { fieldErrors, type FieldErrors } from '@/lib/forms';
 import { settingsQuery } from '@/lib/queries';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import { useSettingsDraft } from './use-settings-draft';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -28,18 +30,18 @@ function blank(kind: Kind): Channel {
   return kind === 'webhook' ? { ...base, kind, url: '' } : kind === 'bark' ? { ...base, kind, server: 'https://api.day.app', key: '' } : { ...base, kind, token: '', chatId: '' };
 }
 
-function ChannelCard({ channel, saved, all, onDone }: { channel: Channel; saved: boolean; all: Channel[]; onDone?: () => void }) {
+function ChannelCard({ channel, saved, onDone }: { channel: Channel; saved: boolean; onDone?: () => void }) {
   const patch = usePatchSettings();
-  const [draft, setDraft] = useState(channel);
-  const [base, setBase] = useState(channel);
-  if (base !== channel) { setBase(channel); setDraft(channel); }
+  const toggle = usePatchSettings();
+  const { draft, setDraft, dirty: changed, saved: acceptSaved } = useSettingsDraft(channel);
+  useUnsavedChanges(!saved || changed);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const dirty = !saved || JSON.stringify(draft) !== JSON.stringify(channel);
+  const dirty = !saved || changed;
   const id = `channel-${channel.id}`;
   const Icon = KINDS[draft.kind].icon;
   const set = (field: string, value: unknown) => { setDraft(old => ({ ...old, [field]: value }) as Channel); setErrors(old => ({ ...old, [field]: undefined })); setResult(null); };
-  const list = (next: Channel | null) => all.some(c => c.id === channel.id) ? all.flatMap(c => c.id !== channel.id ? [c] : next ? [next] : []) : next ? [...all, next] : all;
+  const list = (all: Channel[], next: Channel | null) => all.some(c => c.id === channel.id) ? all.flatMap(c => c.id !== channel.id ? [c] : next ? [next] : []) : next ? [...all, next] : all;
   const test = useMutation({
     mutationFn: (value: Channel) => request('POST /api/notifications/test', { body: value }),
     onMutate: () => setResult(null),
@@ -58,7 +60,13 @@ function ChannelCard({ channel, saved, all, onDone }: { channel: Channel; saved:
   function submit(e: FormEvent) {
     e.preventDefault();
     const value = valid();
-    if (value && dirty && !patch.isPending) patch.mutate({ notifications: list(value) }, { onSuccess: () => { toast.success(saved ? '已保存' : `已添加「${value.name}」`); onDone?.(); } });
+    if (value && dirty && !patch.isPending) patch.mutate(current => ({
+      notifications: list(current.notifications, { ...value, enabled: current.notifications.find(c => c.id === channel.id)?.enabled ?? value.enabled }),
+    }), { onSuccess: next => {
+      const stored = next.notifications.find(c => c.id === channel.id);
+      if (stored) acceptSaved(draft, stored);
+      toast.success(saved ? '已保存' : `已添加「${value.name}」`); onDone?.();
+    } });
   }
   const field = (name: string, label: string, props: { placeholder?: string; mono?: boolean; secret?: boolean; hint?: string }) => {
     const value = (draft as unknown as Record<string, string>)[name] ?? '';
@@ -82,7 +90,7 @@ function ChannelCard({ channel, saved, all, onDone }: { channel: Channel; saved:
         </div>
         {/* The settings update at once (and revert if saving fails), so the switch is not greyed out while it saves. */}
         <Switch aria-label={`启用 ${draft.name}`} checked={saved ? channel.enabled : draft.enabled}
-          onCheckedChange={enabled => { if (!saved) set('enabled', enabled); else if (!patch.isPending) patch.mutate({ notifications: list({ ...channel, enabled }) }); }} />
+          onCheckedChange={enabled => { if (!saved) set('enabled', enabled); else toggle.mutate(current => ({ notifications: current.notifications.map(c => c.id === channel.id ? { ...c, enabled } : c) })); }} />
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         {field('name', '名称', {})}
@@ -104,7 +112,7 @@ function ChannelCard({ channel, saved, all, onDone }: { channel: Channel; saved:
       </p>}
     </div>
     <div className="flex flex-wrap items-center gap-2 border-t bg-muted/35 px-5 py-3.5 sm:px-6">
-      {saved ? <ConfirmAction title={`删除「${channel.name}」？`} description="之后不会再向这个渠道推送通知。" onConfirm={() => patch.mutate({ notifications: list(null) }, { onSuccess: () => void toast.success('已删除') })}>
+      {saved ? <ConfirmAction title={`删除「${channel.name}」？`} description="之后不会再向这个渠道推送通知。" onConfirm={() => patch.mutate(current => ({ notifications: list(current.notifications, null) }), { onSuccess: () => void toast.success('已删除') })}>
         <Button type="button" variant="ghost" size="sm" className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 data-icon="inline-start" />删除</Button>
       </ConfirmAction> : <Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={onDone}>放弃</Button>}
       <span className="mr-auto text-xs text-muted-foreground">{dirty && saved ? '有未保存的更改' : ''}</span>
@@ -126,7 +134,7 @@ function AddButtons({ onAdd }: { onAdd: (kind: Kind) => void }) {
 export function NotificationsSection() {
   const settings = useQuery(settingsQuery);
   const [drafts, setDrafts] = useState<Channel[]>([]);
-  if (settings.error) return <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />;
+  if (settings.error && !settings.data) return <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />;
   if (!settings.data) return <SectionSkeleton />;
   const channels: Settings['notifications'] = settings.data.notifications;
   const add = (kind: Kind) => setDrafts(old => [...old, blank(kind)]);
@@ -138,8 +146,8 @@ export function NotificationsSection() {
     {!channels.length && !drafts.length ? <EmptyState icon={<Bell />} title="还没有通知渠道" description="添加一个渠道，发现新章节、下载失败或登录失效时就会收到消息。" className="border">
       <AddButtons onAdd={add} />
     </EmptyState> : <div className="flex flex-col gap-4">
-      {channels.map(channel => <ChannelCard key={channel.id} channel={channel} saved all={channels} />)}
-      {drafts.filter(draft => !channels.some(c => c.id === draft.id)).map(channel => <ChannelCard key={channel.id} channel={channel} saved={false} all={channels} onDone={() => setDrafts(old => old.filter(c => c.id !== channel.id))} />)}
+      {[...channels, ...drafts.filter(draft => !channels.some(c => c.id === draft.id))].map(channel => <ChannelCard key={channel.id} channel={channel}
+        saved={!drafts.some(draft => draft.id === channel.id)} onDone={() => setDrafts(old => old.filter(c => c.id !== channel.id))} />)}
     </div>}
   </>;
 }

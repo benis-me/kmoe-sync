@@ -174,6 +174,8 @@ export class KmoeClient {
     for (let attempt = 0; ; attempt++) {
       if (kmoeThrottle()) throw throttled();
       await politely(this.interval);
+      if (kmoeThrottle()) throw throttled();
+      outer?.throwIfAborted();
       try {
         const signal = outer ? AbortSignal.any([outer, AbortSignal.timeout(this.timeout)]) : AbortSignal.timeout(this.timeout);
         const response = await this.fetchImpl(url, { ...init, signal });

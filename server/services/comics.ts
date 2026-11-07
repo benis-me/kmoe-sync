@@ -59,8 +59,8 @@ export class ComicService {
     };
   }
 
-  summary(row: ComicRow): ComicSummary {
-    const tracked = Boolean(this.db.query(`SELECT 1 WHERE EXISTS (SELECT 1 FROM subscriptions WHERE comic_id = ?1)
+  summary(row: ComicRow, tracked?: boolean): ComicSummary {
+    tracked ??= Boolean(this.db.query(`SELECT 1 WHERE EXISTS (SELECT 1 FROM subscriptions WHERE comic_id = ?1)
       OR EXISTS (SELECT 1 FROM tasks WHERE comic_id = ?1) OR EXISTS (SELECT 1 FROM deliveries d JOIN items i ON i.id = d.item_id WHERE i.comic_id = ?1)
       OR EXISTS (SELECT 1 FROM library_folders WHERE comic_id = ?1)`).get(row.id));
     return {
@@ -153,8 +153,7 @@ export class ComicService {
 
   // ---------- Item states ----------
   /** Where each item stands for one target + format: in the queue, delivered by us, found by a library check, failed, or missing. */
-  states(comicId: number, targetId: number | null, format: Format): Record<string, ItemStateInfo> {
-    const items = this.items(comicId);
+  states(comicId: number, targetId: number | null, format: Format, items = this.items(comicId)): Record<string, ItemStateInfo> {
     const result: Record<string, ItemStateInfo> = {};
     for (const item of items) result[item.remote_id] = { state: 'missing', paths: [], reason: null, taskId: null };
     if (targetId === null) return result;
@@ -199,8 +198,7 @@ export class ComicService {
   }
 
   /** The target/format a comic page shows by default: its subscription's, else the global defaults. */
-  view(comicId: number, query: { targetId?: number; format?: Format }, defaultTarget: number | null): { targetId: number | null; format: Format } {
-    const subscription = this.subscriptionRow(comicId);
+  view(comicId: number, query: { targetId?: number; format?: Format }, defaultTarget: number | null, subscription = this.subscriptionRow(comicId)): { targetId: number | null; format: Format } {
     // An imported comic is shown where its folder is, in the format its files are in.
     const folders = this.db.query<{ target_id: number; format: Format | null }, [number]>('SELECT target_id, format FROM library_folders WHERE comic_id = ? ORDER BY id').all(comicId);
     const targetId = query.targetId ?? subscription?.target_id ?? (folders.find(folder => folder.target_id === defaultTarget) ?? folders[0])?.target_id ?? defaultTarget;
@@ -254,15 +252,15 @@ export class ComicService {
       GROUP BY c.id`).all();
     return rows.map(row => {
       const subscription = this.subscriptionRow(row.id);
-      const view = this.view(row.id, {}, defaultTarget);
-      const byItem = view.targetId === null ? {} : this.states(row.id, view.targetId, view.format);
+      const view = this.view(row.id, {}, defaultTarget, subscription);
       const items = this.items(row.id);
+      const byItem = view.targetId === null ? {} : this.states(row.id, view.targetId, view.format, items);
       // Only the kinds of items followed: volumes alone are not 12/300 because of 300 chapters nobody wants.
       const types = followedTypes(subscription ? json<ContentType[]>(subscription.types, []) : null, items.filter(item => byItem[item.remote_id]?.state === 'downloaded').map(item => item.type));
       const followed = items.filter(item => types.includes(item.type)), states = followed.map(item => byItem[item.remote_id]?.state);
       const { metadata } = this.folderInfo(row.id, view.targetId);
       return {
-        comic: { ...this.summary(row), tracked: true },
+        comic: this.summary(row, true),
         subscription: subscription ? this.subscriptionDto(subscription, row.key) : null,
         counts: {
           items: followed.length,

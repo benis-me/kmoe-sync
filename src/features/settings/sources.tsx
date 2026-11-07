@@ -10,6 +10,8 @@ import { request } from '@/lib/api';
 import { fromNow } from '@/lib/format';
 import { fieldErrors, type FieldErrors } from '@/lib/forms';
 import { sourcesQuery } from '@/lib/queries';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import { useSettingsDraft } from './use-settings-draft';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -27,21 +29,24 @@ const inputOf = (source: Source): SourceInput => ({ name: source.name, username:
 function SourceCard({ source, onDone }: { source: Source | null; onDone?: () => void }) {
   const client = useQueryClient();
   const initial = source ? inputOf(source) : BLANK;
-  const initialKey = JSON.stringify(initial);
-  const [draft, setDraft] = useState(initial);
-  const [base, setBase] = useState(initialKey);
-  if (base !== initialKey) { setBase(initialKey); setDraft(initial); }
+  const { draft, setDraft, dirty: changed, saved: acceptSaved } = useSettingsDraft(initial);
+  useUnsavedChanges(!source || changed);
   const [errors, setErrors] = useState<FieldErrors>({});
-  const dirty = !source || JSON.stringify(draft) !== initialKey;
+  const dirty = !source || changed;
   const id = source ? `source-${source.id}` : 'source-new';
   const set = <K extends keyof SourceInput>(field: K, value: SourceInput[K]) => { setDraft(old => ({ ...old, [field]: value })); setErrors(old => ({ ...old, [field]: undefined })); };
   const refresh = () => client.invalidateQueries({ queryKey: ['sources'] });
 
   const save = useMutation({
-    mutationFn: (body: SourceInput) => source ? request('PATCH /api/sources/:id', { params: { id: source.id }, body }) : request('POST /api/sources', { body }),
+    scope: { id: `source:${source?.id ?? 'new'}` },
+    mutationFn: (body: SourceInput) => {
+      const { enabled, ...fields } = body;
+      return source ? request('PATCH /api/sources/:id', { params: { id: source.id }, body: fields }) : request('POST /api/sources', { body: { ...fields, enabled } });
+    },
     onSuccess: saved => { void refresh(); toast.success(source ? '已保存' : `已添加「${saved.name}」`, { description: source ? undefined : '正在第一次同步，稍后到发现页查看。' }); onDone?.(); },
   });
   const toggle = useMutation({
+    scope: { id: `source:${source?.id ?? 'new'}` },
     mutationFn: (enabled: boolean) => request('PATCH /api/sources/:id', { params: { id: source!.id }, body: { enabled } }),
     // Pending until the list has the new state: the switch shows what is being saved until then.
     onSuccess: () => refresh(),
@@ -62,11 +67,11 @@ function SourceCard({ source, onDone }: { source: Source | null; onDone?: () => 
     setErrors(next);
     const first = Object.keys(next)[0];
     if (first) document.getElementById(`${id}-${first}`)?.focus();
-    else if (parsed.success && dirty && !save.isPending) save.mutate(parsed.data);
+    else if (parsed.success && dirty && !save.isPending) save.mutate(parsed.data, { onSuccess: saved => acceptSaved(draft, inputOf(saved)) });
   }
 
   return <form noValidate onSubmit={submit} aria-label={source ? `书单 ${source.name}` : '新的书单'} className={cn('animate-rise overflow-hidden rounded-2xl bg-card shadow-soft ring-1', source ? 'ring-border' : 'ring-seal/30')}>
-    <div className="flex flex-col gap-5 p-5 sm:p-6">
+    <fieldset disabled={!source && save.isPending} className="flex min-w-0 flex-col gap-5 p-5 sm:p-6">
       <div className="flex items-start gap-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><ListChecks className="size-4" /></span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -109,7 +114,7 @@ function SourceCard({ source, onDone }: { source: Source | null; onDone?: () => 
           <SelectContent position="popper"><SelectGroup>{INTERVALS.map(([hours, label]) => <SelectItem key={hours} value={String(hours)}>{label}</SelectItem>)}</SelectGroup></SelectContent>
         </Select>
       </Field>
-    </div>
+    </fieldset>
     <div className="flex flex-wrap items-center gap-2 border-t bg-muted/35 px-5 py-3.5 sm:px-6">
       {source ? <ConfirmAction title={`删除「${source.name}」？`} description="同步来的条目和匹配记录会一起删除，已订阅的漫画不受影响。" onConfirm={() => remove.mutate()}>
         <Button type="button" variant="ghost" size="sm" className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 data-icon="inline-start" />删除</Button>
@@ -127,7 +132,7 @@ function SourceCard({ source, onDone }: { source: Source | null; onDone?: () => 
 export function SourcesSection() {
   const sources = useQuery(sourcesQuery);
   const [adding, setAdding] = useState(false);
-  if (sources.error) return <ErrorState error={sources.error} onRetry={() => void sources.refetch()} />;
+  if (sources.error && !sources.data) return <ErrorState error={sources.error} onRetry={() => void sources.refetch()} />;
   if (!sources.data) return <SectionSkeleton />;
   return <>
     {(sources.data.length > 0 || adding) && <div className="flex items-center justify-between gap-3">

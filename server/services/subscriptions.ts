@@ -46,14 +46,14 @@ export class SubscriptionService {
     const wanted = comics.items(comicId).filter(item => policy.types.includes(item.type) && (policy.strategy === 'backfill' || item.first_seen_at > policy.createdAt));
     const wantedIds = new Set(wanted.map(item => item.id));
     const states = comics.states(comicId, policy.targetId, policy.format);
-    const latest = new Map(db.query<{ item_id: number; status: string }, [number, number, string]>(
-      `SELECT t.item_id, t.status FROM tasks t WHERE t.comic_id = ? AND t.target_id = ? AND t.format = ?
-       AND t.id = (SELECT MAX(id) FROM tasks WHERE item_id = t.item_id AND target_id = t.target_id AND format = t.format)`).all(comicId, policy.targetId, policy.format).map(row => [row.item_id, row.status]));
+    const latest = new Map(db.query<{ item_id: number; status: string; error_code: string | null }, [number, number, string]>(
+      `SELECT t.item_id, t.status, t.error_code FROM tasks t WHERE t.comic_id = ? AND t.target_id = ? AND t.format = ?
+       AND t.id = (SELECT MAX(id) FROM tasks WHERE item_id = t.item_id AND target_id = t.target_id AND format = t.format)`).all(comicId, policy.targetId, policy.format).map(row => [row.item_id, row]));
     const queue = wanted.filter(item => {
       const state = states[item.remote_id]?.state ?? 'missing';
       if (state === 'downloaded' || state === 'unknown' || state === 'queued' || state === 'running') return false;
       const last = latest.get(item.id);
-      return last !== 'cancelled' && (includeFailed || last !== 'failed');
+      return (last?.status !== 'cancelled' || last.error_code === 'policy_cancelled') && (includeFailed || last?.status !== 'failed');
     });
     return {
       queue,
@@ -96,7 +96,7 @@ export class SubscriptionService {
         strategy = excluded.strategy, line = excluded.line, next_check_at = COALESCE(next_check_at, excluded.next_check_at), updated_at = excluded.updated_at`).run({ comic: comicId, enabled: input.enabled ? 1 : 0, types: JSON.stringify(input.types), format: input.format, target: input.targetId,
         strategy: input.strategy, line: input.line, next: this.nextCheck(), now: time });
     const plan = this.plan(comicId, this.policyOf(input, existing), true);
-    tasks.cancelQueued(plan.cancel);
+    tasks.cancelQueued(plan.cancel, 'policy');
     tasks.enqueue(comicId, plan.queue, { targetId: input.targetId, format: input.format, line: input.line }, 'subscription');
     hub.emit({ type: 'comic', key });
     hub.emit({ type: 'shelf' });
@@ -108,7 +108,7 @@ export class SubscriptionService {
     const { db, comics, tasks, hub } = this.deps;
     const comic = comics.row(key);
     if (cancelPending) {
-      tasks.cancelQueued(db.query<{ id: number }, [number]>("SELECT id FROM tasks WHERE comic_id = ? AND status = 'queued' AND origin = 'subscription'").all(comic.id).map(row => row.id));
+      tasks.cancelQueued(db.query<{ id: number }, [number]>("SELECT id FROM tasks WHERE comic_id = ? AND status = 'queued' AND origin = 'subscription'").all(comic.id).map(row => row.id), 'policy');
     }
     db.run('DELETE FROM subscriptions WHERE comic_id = ?', [comic.id]);
     hub.emit({ type: 'comic', key });

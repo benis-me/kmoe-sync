@@ -22,15 +22,6 @@ const precompress = (): Plugin => ({
   },
 });
 
-type ModuleGraph = (id: string) => { importers: readonly string[] } | null;
-/** Package code that only `owner` pulls in (directly or through other packages), so it loads with owner's chunk. */
-function onlyFor(owner: string, id: string, graph: ModuleGraph, seen = new Set<string>()): boolean {
-  if (seen.has(id)) return true;
-  seen.add(id);
-  const importers = graph(id)?.importers ?? [];
-  return importers.length > 0 && importers.every(importer => importer.endsWith(owner) || (importer.includes('/node_modules/') && onlyFor(owner, importer, graph, seen)));
-}
-
 export default defineConfig({
   plugins: [react(), tailwindcss(), precompress()],
   resolve: {
@@ -49,9 +40,6 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 900,
-    // Name the shared third-party chunk explicitly (otherwise it is named after whichever app module pulled it in first).
-    // The assistant's Markdown renderer is left out: it loads when the assistant opens.
-    rolldownOptions: { output: { manualChunks: (id: string, { getModuleInfo }: { getModuleInfo: ModuleGraph }) =>
-      id.includes('/node_modules/') && !onlyFor('/src/features/assistant/markdown.tsx', id, getModuleInfo) ? 'vendor' : undefined } },
+    // Let the bundler keep route-only dependencies lazy instead of pulling them into one eager vendor chunk.
   },
 });

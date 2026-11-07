@@ -3,49 +3,38 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Check, LoaderCircle } from 'lucide-react';
 import { cn } from 'cn';
-import type { MetadataSettingsPatch, SettingsPatch } from '@shared/model';
+import type { MetadataSettings, MetadataSettingsPatch, Settings, SettingsPatch } from '@shared/model';
 import { errorMessage, request } from '@/lib/api';
 import { metadataSettingsQuery, settingsQuery } from '@/lib/queries';
+import { createSettingMutation } from '@/lib/setting-mutations';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/app/feedback';
 
-/** Settings that apply at once: the view updates first and reverts if the save fails. */
+const settingsMutation = createSettingMutation<Settings, SettingsPatch>(settingsQuery.queryKey,
+  patch => request('PATCH /api/settings', { body: patch }), (current, patch) => ({ ...current, ...patch }));
+const metadataMutation = createSettingMutation<MetadataSettings, MetadataSettingsPatch>(metadataSettingsQuery.queryKey,
+  patch => request('PATCH /api/metadata/settings', { body: patch }),
+  (current, patch) => ({ ...current, enabled: patch.enabled ?? current.enabled, options: { ...current.options, ...patch.options } }));
+
+/** Every writer of a settings resource shares its queue and optimistic overlay. */
 export function usePatchSettings() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (patch: SettingsPatch) => request('PATCH /api/settings', { body: patch }),
-    onMutate: async patch => {
-      await client.cancelQueries({ queryKey: settingsQuery.queryKey });
-      const previous = client.getQueryData(settingsQuery.queryKey);
-      client.setQueryData(settingsQuery.queryKey, old => old && { ...old, ...patch });
-      return { previous };
-    },
-    onError: (error, _, context) => {
-      client.setQueryData(settingsQuery.queryKey, context?.previous);
-      toast.error(errorMessage(error));
-    },
-    onSuccess: (settings, patch) => {
-      client.setQueryData(settingsQuery.queryKey, settings);
+    ...settingsMutation(client),
+    onError: error => void toast.error(errorMessage(error)),
+    onSuccess: (_, patch) => {
       void client.invalidateQueries({ queryKey: ['status'] });
-      if ('defaultTargetId' in patch) void client.invalidateQueries({ queryKey: ['targets'] });
+      if (typeof patch !== 'function' && 'defaultTargetId' in patch) void client.invalidateQueries({ queryKey: ['targets'] });
     },
   });
 }
 
-/** Komga 元数据 settings: the switch and the options show the change at once and revert if saving fails. */
 export function usePatchMetadata() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (patch: MetadataSettingsPatch) => request('PATCH /api/metadata/settings', { body: patch }),
-    onMutate: async patch => {
-      await client.cancelQueries({ queryKey: metadataSettingsQuery.queryKey });
-      const previous = client.getQueryData(metadataSettingsQuery.queryKey);
-      client.setQueryData(metadataSettingsQuery.queryKey, old => old && { ...old, enabled: patch.enabled ?? old.enabled, options: { ...old.options, ...patch.options } });
-      return { previous };
-    },
-    onError: (error, _, context) => { client.setQueryData(metadataSettingsQuery.queryKey, context?.previous); toast.error(errorMessage(error)); },
-    onSuccess: next => {
-      client.setQueryData(metadataSettingsQuery.queryKey, next);
+    ...metadataMutation(client),
+    onError: error => void toast.error(errorMessage(error)),
+    onSuccess: () => {
       // Komga states of folders follow the switch and the library mapping; Bangumi hints follow the source.
       for (const queryKey of [['library'], ['comic'], ['shelf']]) void client.invalidateQueries({ queryKey });
     },

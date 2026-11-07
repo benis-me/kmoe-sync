@@ -17,5 +17,5 @@
     "types": ["bun"],
     "paths": { "@/*": ["./src/*"], "@shared/*": ["./shared/*"] }
   },
-  "include": ["server", "shared", "tests", "scripts", "src/lib/api.ts", "src/lib/queries.ts"]
+  "include": ["server", "shared", "tests", "scripts", "src/lib/api.ts", "src/lib/queries.ts", "src/lib/setting-mutations.ts", "src/features/settings/use-settings-draft.ts"]
 }

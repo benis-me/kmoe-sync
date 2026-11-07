@@ -23,8 +23,9 @@ const AUTO_RETRY_MS = 5 * 60_000, AUTO_RETRY_MAX_MS = 2 * 3_600_000;
 const remaining = (quota: Quota | null) => quota?.totalMB != null && quota.usedMB != null ? Math.max(0, quota.totalMB - quota.usedMB) : null;
 
 export class KmoeService {
-  /** MB spent since the last profile refresh, so the quota guard sees downloads before the next refresh. */
-  private spentSinceRefresh = 0;
+  /** Link charges, with a snapshot at the start of the last successful profile refresh. */
+  private spentMB = 0;
+  private refreshedSpentMB = 0;
   /** In-flight work belongs to one login/mirror, never to a later session. */
   private sessionVersion = 0;
   private hooks: KmoeHooks = { expired() {}, restored() {} };
@@ -56,7 +57,7 @@ export class KmoeService {
     return {
       state: row.state, email: row.email, mirror: row.mirror ? new URL(row.mirror).host : null, level: row.level,
       vip: row.vip === null ? null : row.vip === 1, free, vipQuota,
-      remainingMB: parts.length ? Math.max(0, parts.reduce((sum, value) => sum + value, 0) - this.spentSinceRefresh) : null,
+      remainingMB: parts.length ? Math.max(0, parts.reduce((sum, value) => sum + value, 0) - (this.spentMB - this.refreshedSpentMB)) : null,
       checkedAt: row.checked_at, error: row.error,
       throttledUntil: ((cooldown) => cooldown ? new Date(cooldown.until).toISOString() : null)(kmoeThrottle()),
       remember: row.remember === 1,
@@ -138,8 +139,8 @@ export class KmoeService {
       [this.sealer.seal(JSON.stringify(Object.fromEntries(cookies))), now()]);
   }
 
-  private saveAccount(info: AccountInfo, site: KmoeSite, email?: string) {
-    this.spentSinceRefresh = 0;
+  private saveAccount(info: AccountInfo, site: KmoeSite, email?: string, spentAtStart = this.spentMB) {
+    this.refreshedSpentMB = spentAtStart;
     this.db.query(`UPDATE kmoe_account SET ${email !== undefined ? 'email = $email, ' : ''}mirror = $mirror, cookies = $cookies, state = 'active', level = $level, vip = $vip,
       free_quota = $free, vip_quota = $vipQuota, checked_at = $now, error = NULL, updated_at = $now WHERE id = 1`).run({
       ...(email !== undefined ? { email } : {}), mirror: site.client.origin, cookies: this.sealer.seal(JSON.stringify(site.client.cookieJar())),
@@ -229,11 +230,12 @@ export class KmoeService {
 
   /** Re-validates the session and refreshes quota. */
   async refresh(): Promise<KmoeAccount> {
-    const version = this.sessionVersion, site = this.site();
+    const version = this.sessionVersion, site = this.site(), spentAtStart = this.spentMB;
     try {
       const info = await site.account();
       this.assertSession(version);
-      this.saveAccount(info, this.site());
+      // A delayed profile response must not erase charges settled while it was in flight.
+      this.saveAccount(info, this.site(), undefined, spentAtStart);
     } catch (error) {
       this.assertSession(version);
       if (error instanceof KmoeError && error.code === 'login_required') this.expire(error.message);
@@ -257,5 +259,5 @@ export class KmoeService {
     this.hooks.expired(message);
   }
 
-  recordUsage(mb: number) { if (Number.isFinite(mb) && mb > 0) this.spentSinceRefresh += mb; }
+  recordUsage(mb: number) { if (Number.isFinite(mb) && mb > 0) this.spentMB += mb; }
 }

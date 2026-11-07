@@ -22,11 +22,12 @@ export function StorageSection() {
   const targets = useQuery(targetsQuery);
   const { data: status } = useQuery(statusQuery);
   const [open, setOpen] = useState<number | 'new' | null>(null);
-  if (targets.error) return <ErrorState error={targets.error} onRetry={() => void targets.refetch()} />;
+  const [adding, setAdding] = useState(false);
+  if (targets.error && !targets.data) return <ErrorState error={targets.error} onRetry={() => void targets.refetch()} />;
   if (!targets.data || !status) return <SectionSkeleton />;
   const root = status.libraryRoot;
   const add = () => {
-    flushSync(() => setOpen('new'));
+    flushSync(() => { setAdding(true); setOpen('new'); });
     document.getElementById('target-new-name')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
 
@@ -52,17 +53,17 @@ export function StorageSection() {
             </span>
             <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground transition-transform duration-250 ease-out-strong group-data-[state=open]/row:rotate-180" />
           </CollapsibleTrigger>
-          <CollapsibleContent>
+          <CollapsibleContent forceMount hidden={open !== target.id}>
             <div className="border-t"><TargetEditor target={target} libraryRoot={root} /></div>
           </CollapsibleContent>
         </Collapsible>
       </li>)}
-      {open === 'new' && <li className="animate-rise overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-seal/30">
+      {adding && <li hidden={open !== 'new'} className="animate-rise overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-seal/30">
         <div className="flex items-center gap-3.5 border-b px-5 py-4">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-seal-soft text-seal"><Plus className="size-4" /></span>
           <span className="font-medium">新的存储位置</span>
         </div>
-        <TargetEditor target={null} libraryRoot={root} onSaved={saved => setOpen(saved.id)} onDiscard={() => setOpen(null)} />
+        <TargetEditor target={null} libraryRoot={root} onSaved={saved => { setAdding(false); setOpen(saved.id); }} onDiscard={() => { setAdding(false); setOpen(null); }} />
       </li>}
     </ul>
     <ExtensionImport />

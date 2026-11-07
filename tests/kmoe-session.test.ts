@@ -136,6 +136,27 @@ it('propagates profile verification failures without expiring the account', asyn
   expect(expired()).toBe(0);
 });
 
+it('retains charges settled while a profile refresh was in flight', async () => {
+  const { svc, routes } = await setup();
+  const before = svc.account().remainingMB!;
+  const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  routes.set('/my.php', async (url, init) => {
+    routes.delete('/my.php');
+    const response = await fetch(url, init);
+    entered.resolve();
+    await release.promise;
+    return response;
+  });
+  const pending = svc.refresh();
+  await entered.promise;
+  svc.recordUsage(1);
+  expect(svc.account().remainingMB).toBe(before - 1);
+  release.resolve();
+  expect((await pending).remainingMB).toBe(before - 1);
+  // A later profile is authoritative for all charges made before its request.
+  expect((await svc.refresh()).remainingMB).toBe(before);
+});
+
 it('does not overwrite a new login with an old successful profile refresh', async () => {
   const { svc, routes } = await setup();
   const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();

@@ -10,6 +10,8 @@ import type { BangumiArchiveStatus, BangumiSource, MetadataSettings } from '@sha
 import { errorMessage, request } from '@/lib/api';
 import { MB, formatMB, fromNow, percent } from '@/lib/format';
 import { metadataSettingsQuery, settingsQuery } from '@/lib/queries';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import { useSettingsDraft } from './use-settings-draft';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -133,13 +135,9 @@ export function BangumiSourceCard({ bangumi }: { bangumi: MetadataSettings['bang
   const patch = usePatchMetadata();
   const { data: proxy = '' } = useQuery({ ...settingsQuery, select: settings => settings.proxy });
   const initial = { source: bangumi.source, token: '' };
-  const initialKey = JSON.stringify(initial);
-  const [draft, setDraft] = useState(initial);
-  const [base, setBase] = useState(initialKey);
-  // Saved here or elsewhere: start from the saved values again (live archive updates do not touch these).
-  if (base !== initialKey) { setBase(initialKey); setDraft(initial); }
+  const { draft, setDraft, dirty, saved } = useSettingsDraft(initial);
+  useUnsavedChanges(dirty);
   const [tested, setTested] = useState<{ proxy: string; check: Check } | null>(null);
-  const dirty = JSON.stringify(draft) !== initialKey;
   const set = <K extends keyof typeof initial>(field: K, value: (typeof initial)[K]) => setDraft(old => ({ ...old, [field]: value }));
 
   const test = useMutation({
@@ -163,7 +161,7 @@ export function BangumiSourceCard({ bangumi }: { bangumi: MetadataSettings['bang
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!dirty || patch.isPending) return;
-    patch.mutate({ bangumi: { source: draft.source, ...(draft.token ? { token: draft.token } : {}) } }, { onSuccess: () => void toast.success('已保存 Bangumi 数据来源') });
+    patch.mutate({ bangumi: { source: draft.source, ...(draft.token ? { token: draft.token } : {}) } }, { onSuccess: next => { saved(draft, { source: next.bangumi.source, token: '' }); toast.success('已保存 Bangumi 数据来源'); } });
   }
 
   return <form id="bangumi-source" noValidate onSubmit={submit} aria-labelledby="bangumi-source-title" className="scroll-mt-20 overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border">
@@ -205,8 +203,8 @@ export function BangumiSourceCard({ bangumi }: { bangumi: MetadataSettings['bang
             <PasswordInput id="bangumi-token" autoComplete="off" className="font-mono" placeholder={bangumi.hasToken ? '已保存，留空则不修改' : '匹配 NSFW 条目时才需要'}
               value={draft.token} onChange={e => set('token', e.target.value)} aria-describedby="bangumi-token-hint" />
             {bangumi.hasToken && <ConfirmAction title="清除 Bangumi 令牌？" description="之后搜索和匹配不会包含 NSFW 条目。" action="清除"
-              onConfirm={() => patch.mutate({ bangumi: { token: '' } }, { onSuccess: () => void toast.success('已清除 Bangumi 令牌') })}>
-              <Button type="button" variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-destructive">清除</Button>
+              onConfirm={() => { if (!patch.isPending) patch.mutate({ bangumi: { token: '' } }, { onSuccess: () => void toast.success('已清除 Bangumi 令牌') }); }}>
+              <Button type="button" variant="ghost" size="sm" disabled={patch.isPending} className="shrink-0 text-muted-foreground hover:text-destructive">清除</Button>
             </ConfirmAction>}
           </div>
           <p id="bangumi-token-hint" className="text-xs text-muted-foreground">在 next.bgm.tv/demo/access-token 生成，只用于在线查询。</p>

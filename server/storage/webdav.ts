@@ -110,7 +110,7 @@ export function createWebdavTarget(options: { url: string; username?: string | n
     } catch { return null; }
   }
 
-  async function request(method: 'PROPFIND' | 'MKCOL' | 'MOVE', path: string, options: { dir?: boolean; depth?: '0' | '1'; signal?: AbortSignal; headers?: Record<string, string> }) {
+  async function request(method: 'PROPFIND' | 'MKCOL' | 'MOVE' | 'DELETE', path: string, options: { dir?: boolean; depth?: '0' | '1'; signal?: AbortSignal; headers?: Record<string, string> }) {
     const { dir, depth, signal } = options;
     const timeout = AbortSignal.timeout(timeouts.request);
     try {
@@ -209,13 +209,28 @@ export function createWebdavTarget(options: { url: string; username?: string | n
     // Checked up front too: a server that ignores If-None-Match would otherwise overwrite.
     const existing = await stat(current, options.signal);
     if (existing) return settle(existing, source);
-    await ensureDir(current.slice(0, current.lastIndexOf('/')) || '/', options.signal);
-    const status = await upload(remote(current), source, options.signal, options.onProgress);
-    if (status === 412) return settle(await stat(current, options.signal), source);
-    if (status < 200 || status >= 300) throw httpError(status, '上传', current);
-    const stored = await stat(current, options.signal);
-    if (!stored || stored.directory || stored.size !== source.size) throw new StorageError('io', '上传后文件大小核验失败，请检查远程文件后重试');
-    return 'stored';
+    const parent = current.slice(0, current.lastIndexOf('/')) || '/';
+    await ensureDir(parent, options.signal);
+    // A failed PUT may leave a partial object. Each attempt owns only this hidden path, never the final file.
+    const temporary = joinPath(parent, `.kmoesync-${crypto.randomUUID()}.part`);
+    let cleanup = true;
+    try {
+      const status = await upload(remote(temporary), source, options.signal, options.onProgress);
+      if (status === 412) cleanup = false; // The server says it already existed: it is not ours to delete.
+      if (status < 200 || status >= 300) throw httpError(status, '上传', current);
+      const stored = await stat(temporary, options.signal);
+      if (!stored || stored.directory || stored.size !== source.size) throw new StorageError('io', '上传后文件大小核验失败，将重新上传', true);
+      try { await move(temporary, current, options.signal); }
+      catch (error) {
+        if (error instanceof StorageError && error.code === 'conflict') return settle(await stat(current, options.signal), source);
+        throw error;
+      }
+      cleanup = false;
+      return 'stored';
+    } finally {
+      // A cancelled upload still cleans up, but must finish within the worker's shutdown grace period.
+      if (cleanup) await request('DELETE', remote(temporary), { signal: AbortSignal.timeout(2000) }).catch(() => {});
+    }
   }
 
   async function move(from: string, to: string, signal?: AbortSignal): Promise<void> {

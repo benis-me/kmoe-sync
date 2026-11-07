@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { Link, Outlet, getRouteApi, useLocation } from '@tanstack/react-router';
 import { motion } from 'motion/react';
+import { UnsavedChangesProvider } from '@/lib/use-unsaved-changes';
 import { Bell, Globe, HardDrive, Info, ListChecks, Plug, ShieldCheck, Sparkles, Tags, Timer, UserRound } from 'lucide-react';
 import { Indicator } from '@/components/ui/indicator';
 import { Page } from '@/components/app/page';
@@ -67,7 +68,7 @@ export function SettingsLayout() {
         <Indicator axis="x" className="top-auto -bottom-px h-0.5 rounded-full bg-seal md:hidden" />
         <Indicator className="rounded-lg bg-accent max-md:hidden" />
       </nav>
-      <Outlet />
+      <UnsavedChangesProvider><Outlet /></UnsavedChangesProvider>
     </div>
   </Page>;
 }

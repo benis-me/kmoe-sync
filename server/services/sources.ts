@@ -22,6 +22,8 @@ export interface BangumiEntry { externalId: string; title: string; originalTitle
 export async function fetchCollections(username: string, types: BangumiType[], fetchImpl: typeof fetch = fetch): Promise<BangumiEntry[]> {
   const entries: BangumiEntry[] = [];
   for (const type of types) {
+    let total: number | undefined;
+    const seen = new Set<string>();
     for (let page = 0; page < MAX_PAGES; page++) {
       const url = `https://api.bgm.tv/v0/users/${encodeURIComponent(username)}/collections?subject_type=1&type=${TYPE_CODES[type]}&limit=${PAGE}&offset=${page * PAGE}`;
       let response: Response;
@@ -31,15 +33,25 @@ export async function fetchCollections(username: string, types: BangumiType[], f
       if (response.status === 404) throw new AppError(404, 'bangumi_user', `Bangumi 上找不到用户「${username}」`);
       if (!response.ok) throw Object.assign(new Error(`Bangumi 返回 HTTP ${response.status}`), { retryable: transientStatus(response.status) });
       const body = await response.json() as { data?: Collection[]; total?: number };
-      for (const entry of body.data ?? []) {
+      if (typeof body.total !== 'number' || !Number.isSafeInteger(body.total) || body.total < 0 || !Array.isArray(body.data)) {
+        throw new AppError(502, 'bangumi_incomplete', 'Bangumi 书单分页信息不完整，已保留原有条目，请稍后重试');
+      }
+      if (body.total > PAGE * MAX_PAGES) throw new AppError(502, 'bangumi_incomplete', `Bangumi 单个收藏类型超过 ${PAGE * MAX_PAGES} 项，本次未同步，已保留原有条目`);
+      total ??= body.total;
+      if (body.total !== total || body.data.length !== Math.min(PAGE, total - page * PAGE)) {
+        throw new AppError(502, 'bangumi_incomplete', 'Bangumi 书单分页不完整或同步期间发生变化，已保留原有条目，请稍后重试');
+      }
+      for (const entry of body.data) {
         const subject = entry.subject;
         const id = String(subject?.id ?? entry.subject_id);
+        if (seen.has(id)) throw new AppError(502, 'bangumi_incomplete', 'Bangumi 书单分页包含重复条目，已保留原有条目，请稍后重试');
+        seen.add(id);
         entries.push({
           externalId: id, title: subject?.name_cn || subject?.name || `#${id}`, originalTitle: subject?.name_cn && subject.name ? subject.name : null,
           status: CODE_TYPES[entry.type] ?? type, cover: subject?.images?.common || subject?.images?.medium || null, url: `https://bgm.tv/subject/${id}`,
         });
       }
-      if ((page + 1) * PAGE >= (body.total ?? 0) || !body.data?.length) break;
+      if (seen.size === total) break;
     }
   }
   return entries;

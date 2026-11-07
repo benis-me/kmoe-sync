@@ -241,7 +241,7 @@ function LibraryView({ target, targets, filters, onFilters }: { target: Target; 
   return <>
     <div className="flex flex-col">
       <LibraryStrip overview={overview} metadata={meta.data ?? null} kmoeActive={kmoeActive} ai={aiReady} jobs={jobs} filters={applied} onPick={pick}
-        onRename={() => setRenaming({ opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })} />
+        onRename={opener => setRenaming({ opener })} />
       {jobArea}
     </div>
 
@@ -284,7 +284,7 @@ function LibraryView({ target, targets, filters, onFilters }: { target: Target; 
         <ul aria-label={`${label}的文件夹`} className={cn('flex flex-col divide-y transition-opacity duration-150', shown !== visible && 'opacity-60')}>
           {/* The index only staggers the first rows in; capping it keeps the others memoized when the filter changes. */}
           {shown.map((folder, index) => <FolderRow key={folder.id} folder={folder} index={Math.min(index, 15)} pending={pending.get(folder.id) ?? null}
-            busy={isCurrent(running ?? undefined, folder)} meta={showMeta} handlers={handlers} />)}
+            busy={isCurrent(running ?? undefined, folder)} meta={showMeta} deferRendering={shown.length > 60} handlers={handlers} />)}
         </ul>
       </div>}
     </section>

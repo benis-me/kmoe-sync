@@ -106,6 +106,8 @@ export class MetadataService {
   private readonly online: BangumiClient;
   private readonly offline: OfflineData;
   private ticking = false;
+  private readonly syncing = new Map<number, Promise<'synced' | 'not_found' | 'error' | 'skipped'>>();
+  private readonly changedDuringSync = new Set<number>();
   /** Last Komga library scan we asked for, per library id. */
   private readonly scans = new Map<string, number>();
   private cacheCleanedAt = 0;
@@ -192,7 +194,10 @@ export class MetadataService {
     }
     // Another server or library: every folder has to be found (and written) again.
     if (next.komga.url !== current.komga.url || JSON.stringify(next.komga.libraries) !== JSON.stringify(current.komga.libraries)) {
-      this.deps.db.run("UPDATE folder_metadata SET komga_state = 'pending', komga_series_id = NULL, komga_error = NULL, dirty = 1, attempts = 0, next_attempt_at = NULL");
+      this.deps.db.run(`UPDATE folder_metadata SET komga_state = 'pending', komga_series_id = NULL,
+        komga_written = CASE WHEN ? THEN NULL ELSE komga_written END, komga_error = NULL, dirty = 1, attempts = 0, next_attempt_at = NULL`,
+        [next.komga.url !== current.komga.url ? 1 : 0]);
+      for (const id of this.syncing.keys()) this.changedDuringSync.add(id);
     }
     for (const target of this.deps.targets.list()) this.deps.hub.emit({ type: 'folders', targetId: target.id });
     return this.settings();
@@ -348,20 +353,34 @@ export class MetadataService {
     return stored;
   }
 
-  /** The Komga series showing a folder: the library's series are listed once per run and matched by path below its root. */
-  private async locate(run: Run, libraryId: string, path: string): Promise<{ root: string; series: KomgaSeries | undefined }> {
+  /** Known series use a single lookup; stale ids fall back to one library index per run. Always verify the destination. */
+  private async locate(run: Run, libraryId: string, path: string, seriesId?: string | null): Promise<{ root: string; series: KomgaSeries | undefined }> {
     run.roots ??= run.komga.libraries(run.signal).then(list => new Map(list.map(library => [library.id, library.root])))
       .catch(error => { run.roots = undefined; throw error; });
     const root = (await run.roots).get(libraryId);
     if (root === undefined) throw new AppError(404, 'komga_library_missing', `Komga 中找不到对应的书库（${libraryId}），请在设置中重新选择`);
+    const read = async (id: string) => {
+      try {
+        const series = await run.komga.series(id, run.signal);
+        return series.id === id && series.libraryId === libraryId && !series.deleted && below(root, series.url) === plainPath(path) ? series : undefined;
+      } catch (error) {
+        if (error instanceof AppError && error.code === 'komga_not_found') return undefined;
+        throw error;
+      }
+    };
+    if (seriesId) {
+      const series = await read(seriesId);
+      if (series) return { root, series };
+    }
     let index = run.index.get(libraryId);
     if (!index) {
       index = run.komga.seriesIn(libraryId, run.signal)
-        .then(list => new Map(list.flatMap(series => { const relative = below(root, series.url); return relative ? [[relative, series] as const] : []; })))
+        .then(list => new Map(list.flatMap(series => { const relative = below(root, series.url); return series.libraryId === libraryId && !series.deleted && relative ? [[relative, series] as const] : []; })))
         .catch(error => { run.index.delete(libraryId); throw error; });
       run.index.set(libraryId, index);
     }
-    return { root, series: (await index).get(plainPath(path)) };
+    const found = (await index).get(plainPath(path));
+    return { root, series: found ? await read(found.id) : undefined };
   }
 
   // ---------- Folder state ----------
@@ -409,6 +428,7 @@ export class MetadataService {
    * (renamed files show in Komga only after its scan).
    */
   markDirty(folderId: number, minutes = 0): void {
+    if (this.syncing.has(folderId)) this.changedDuringSync.add(folderId);
     const next = minutes ? new Date(Date.now() + minutes * 60_000).toISOString() : null;
     this.deps.db.run(`INSERT INTO folder_metadata (folder_id, dirty, next_attempt_at, updated_at) VALUES (?, 1, ?, ?)
       ON CONFLICT (folder_id) DO UPDATE SET dirty = 1, attempts = 0, next_attempt_at = excluded.next_attempt_at, updated_at = excluded.updated_at`, [folderId, next, now()]);
@@ -454,6 +474,7 @@ export class MetadataService {
     this.deps.db.run('INSERT OR IGNORE INTO folder_metadata (folder_id, updated_at) VALUES (?, ?)', [folderId, now()]);
     const previous = this.meta(folderId)!;
     const changed = state === 'matched' && subject !== null && (previous.bangumi_state !== 'matched' || previous.bangumi_id !== subject.id);
+    if (this.syncing.has(folderId)) this.changedDuringSync.add(folderId);
     // bangumi_id keeps the last matched subject after an unmatch: its Komga link is ours (or rejected) and is not reused.
     this.deps.db.query(`UPDATE folder_metadata SET bangumi_state = $state, bangumi_id = COALESCE($id, bangumi_id), bangumi_subject = $subject,
       bangumi_candidates = COALESCE($candidates, bangumi_candidates), bangumi_source = $source, bangumi_checked_at = $now, updated_at = $now,
@@ -471,7 +492,7 @@ export class MetadataService {
     const libraryId = this.libraryOf(row.target_id);
     let linked: number | null = null;
     if (run && libraryId) {
-      try { linked = linkedSubject((await this.locate(run, libraryId, row.path)).series?.metadata.links ?? []); } catch (error) {
+      try { linked = linkedSubject((await this.locate(run, libraryId, row.path, previous?.komga_series_id)).series?.metadata.links ?? []); } catch (error) {
         if (signal?.aborted) throw error;
       }
     }
@@ -509,6 +530,7 @@ export class MetadataService {
 
   unmatchFolder(folderId: number): void {
     const row = this.folder(folderId);
+    if (this.syncing.has(folderId)) this.changedDuringSync.add(folderId);
     const time = now();
     this.deps.db.run('INSERT OR IGNORE INTO folder_metadata (folder_id, updated_at) VALUES (?, ?)', [row.id, time]);
     // checked_at stays set, so the scheduler does not quietly match it again; the match job or "auto" does.
@@ -566,16 +588,41 @@ export class MetadataService {
     });
   }
 
-  private async syncOne(row: FolderRow, run: Run, stored = this.stored()): Promise<'synced' | 'not_found' | 'error' | 'skipped'> {
+  /** All entry points share this queue; snapshots are read only after the preceding write has finished. */
+  private syncOne(row: FolderRow, run: Run): Promise<'synced' | 'not_found' | 'error' | 'skipped'> {
+    const previous = this.syncing.get(row.id) ?? Promise.resolve();
+    const pending = previous.catch(() => {}).then(() => this.syncCurrent(row.id, run)).finally(() => {
+      if (this.syncing.get(row.id) === pending) { this.syncing.delete(row.id); this.changedDuringSync.delete(row.id); }
+    });
+    this.syncing.set(row.id, pending);
+    return pending;
+  }
+
+  private async syncCurrent(folderId: number, run: Run): Promise<'synced' | 'not_found' | 'error' | 'skipped'> {
+    run.signal?.throwIfAborted();
+    const row = this.folder(folderId), stored = this.stored(), config = this.komgaConfig();
     const meta = this.meta(row.id);
     const libraryId = this.libraryOf(row.target_id, stored);
-    if (!meta || meta.bangumi_state !== 'matched' || meta.bangumi_id === null || !libraryId) return 'skipped';
-    const started = now();
+    if (!stored.enabled || !config || !meta || meta.bangumi_state !== 'matched' || meta.bangumi_id === null || !libraryId) return 'skipped';
+    if (JSON.stringify(config) !== JSON.stringify(run.komga.config)) run = this.newRun(run.signal)!;
+    const sameDestination = () => {
+      const current = this.deps.db.query<FolderRow, [number]>('SELECT * FROM library_folders WHERE id = ?').get(row.id);
+      return current?.created_at === row.created_at && current.target_id === row.target_id && current.path === row.path
+        && this.stored().komga.url === stored.komga.url && this.libraryOf(row.target_id) === libraryId;
+    };
+    // Keep dirty on disk until success; the set also catches new work within the same millisecond.
+    this.changedDuringSync.delete(row.id);
+    const changed = () => this.changedDuringSync.has(row.id) || this.meta(row.id)?.updated_at !== meta.updated_at || this.folder(row.id).comic_id !== row.comic_id;
     try {
-      const { root, series } = await this.locate(run, libraryId, row.path);
+      const subject = await this.bangumi.subject(meta.bangumi_id, run.signal);
+      if (!subject) throw new AppError(404, 'bangumi_missing', `无法读取 Bangumi 条目 ${meta.bangumi_id}（条目已删除，或是 R18 条目而未设置 Access Token）`);
+      const persons = await this.bangumi.persons(subject.id, run.signal);
+      const related = await this.bangumi.related(subject.id, run.signal);
+      // Read Komga after Bangumi, so user locks edited during a slow metadata fetch are still respected.
+      const { root, series } = await this.locate(run, libraryId, row.path, meta.komga_series_id);
       if (!series) {
         await this.requestScan(run, libraryId, row);
-        this.retryLater(row.id, meta.attempts, 'not_found', 'Komga 书库里还没有这个文件夹：已请求 Komga 扫描，稍后自动重试');
+        if (sameDestination() && !changed()) this.retryLater(row.id, meta.attempts, 'not_found', 'Komga 书库里还没有这个文件夹：已请求 Komga 扫描，稍后自动重试');
         return 'not_found';
       }
       const comic = row.comic_id ? this.deps.comics.byId(row.comic_id) : null;
@@ -584,36 +631,42 @@ export class MetadataService {
       // A series synced before these records were kept still carries our series id: what Komga holds there was written here.
       const written: Written = previous?.seriesId === series.id ? previous
         : { seriesId: series.id, series: {}, books: {}, adopt: !previous && meta.komga_series_id === series.id };
-      const { subject, volumes, books } = await syncSeries({
-        seriesId: series.id, subjectId: meta.bangumi_id, root, files: this.kmoeFiles(row), fileTitle: row.hint ?? comic?.title ?? null,
+      const { volumes, books } = await syncSeries({
+        series, subject, persons, related, root, files: this.kmoeFiles(row), fileTitle: row.hint ?? comic?.title ?? null,
         polish: polish?.status === 'accepted' && polish.subjectId === meta.bangumi_id ? polish.polished : null,
         comic: comic ? { title: comic.title, status: comic.status, language: comic.language, volumes: this.deps.comics.items(comic.id).filter(item => item.type === 'volume').length } : null,
         kmoeUrl: comic ? `${this.deps.kmoe.origin()}/c/${comic.key}.htm` : null, written,
       }, { komga: run.komga, bangumi: this.bangumi, fetch: this.net, options: stored.options, signal: run.signal })
-        .finally(() => this.deps.db.run('UPDATE folder_metadata SET komga_written = ? WHERE folder_id = ?', [JSON.stringify(written), row.id]));
-      // A volume downloaded minutes ago is usually not in Komga yet: ask for a scan and come back (after 2, 5, 15, 60 minutes)
-      // to write its book. Changes that arrived while this ran (markDirty) also keep the folder dirty.
+        .finally(() => {
+          if (sameDestination()) this.deps.db.run('UPDATE folder_metadata SET komga_written = ? WHERE folder_id = ?', [JSON.stringify(written), row.id]);
+        });
+      // A volume downloaded minutes ago is usually not in Komga yet: ask for a scan and come back (after 2, 5, 15, 60 minutes).
       const delay = books && this.recentFiles(row).some(path => !books.has(path)) ? BACKOFF_MINUTES[meta.attempts] : undefined;
       if (delay) await this.requestScan(run, libraryId, row);
+      if (!sameDestination()) return 'skipped';
       this.deps.db.query(`UPDATE folder_metadata SET komga_state = 'synced', komga_series_id = $series, komga_synced_at = $now, komga_error = NULL,
-        attempts = $attempts, next_attempt_at = $next, dirty = CASE WHEN $waiting OR updated_at > $started THEN 1 ELSE 0 END,
+        attempts = CASE WHEN $changed THEN attempts ELSE $attempts END, next_attempt_at = CASE WHEN $changed THEN next_attempt_at ELSE $next END,
+        dirty = CASE WHEN $changed OR $waiting THEN 1 ELSE 0 END,
         bangumi_subject = CASE WHEN bangumi_id = $id AND bangumi_state = 'matched' THEN $subject ELSE bangumi_subject END, updated_at = $now WHERE folder_id = $folder`)
-        .run({ series: series.id, now: now(), started, id: subject.id, subject: JSON.stringify(subjectDto(subject, volumes)), folder: row.id,
+        .run({ series: series.id, now: now(), changed: changed() ? 1 : 0, id: subject.id, subject: JSON.stringify(subjectDto(subject, volumes)), folder: row.id,
           attempts: delay ? meta.attempts + 1 : 0, next: delay ? new Date(Date.now() + delay * 60_000).toISOString() : null, waiting: delay ? 1 : 0 });
       return 'synced';
     } catch (error) {
-      // No Bangumi source at all is not this folder's fault: the caller stops (and the folder stays dirty).
-      if (run.signal?.aborted || offlinePending(error)) throw error;
-      this.retryLater(row.id, meta.attempts, 'error', errorMessage(error));
+      // No Bangumi source at all is not this folder's fault; cancelled runs also leave their work for the next caller.
+      if (run.signal?.aborted || offlinePending(error)) {
+        this.deps.db.run('UPDATE folder_metadata SET dirty = 1 WHERE folder_id = ?', [row.id]);
+        throw error;
+      }
+      if (sameDestination() && !changed()) this.retryLater(row.id, meta.attempts, 'error', errorMessage(error));
       return 'error';
     }
   }
 
   async syncFolder(folderId: number): Promise<void> {
     const row = this.folder(folderId);
-    const stored = this.requireKomga(row.target_id);
+    this.requireKomga(row.target_id);
     if (this.meta(row.id)?.bangumi_state !== 'matched') throw new AppError(409, 'bangumi_unmatched', '请先为这个文件夹匹配 Bangumi 条目');
-    await this.syncOne(row, this.newRun()!, stored);
+    await this.syncOne(row, this.newRun()!);
     this.touched(row);
   }
 
@@ -652,7 +705,7 @@ export class MetadataService {
 
   startSyncJob(targetId: number, all: boolean): LibraryJob {
     this.deps.targets.get(targetId);
-    const stored = this.requireKomga(targetId);
+    this.requireKomga(targetId);
     const rows = this.deps.db.query<FolderRow, [number]>(`SELECT f.* FROM library_folders f JOIN folder_metadata m ON m.folder_id = f.id
       WHERE f.target_id = ? AND m.bangumi_state = 'matched'${all ? '' : ' AND m.dirty = 1'} ORDER BY f.path COLLATE NOCASE`).all(targetId);
     const again = () => { this.startSyncJob(targetId, all); };
@@ -665,7 +718,7 @@ export class MetadataService {
       for (const [index, row] of rows.entries()) {
         context.signal.throwIfAborted();
         context.progress({ done: index, current: row.path });
-        const result = await this.syncOne(row, run, stored).catch(error => {
+        const result = await this.syncOne(row, run).catch(error => {
           if (offlinePending(error)) this.resumeJob = again;
           throw error;
         });
@@ -864,7 +917,7 @@ export class MetadataService {
         .all(now(), JSON.stringify(stored.komga.libraries.map(entry => entry.targetId)), TICK_BATCH);
       for (const row of due) {
         if (!idle()) return;
-        try { await this.syncOne(row, run, stored); } catch (error) {
+        try { await this.syncOne(row, run); } catch (error) {
           if (offlinePending(error)) return; // no Bangumi source yet: the folders stay dirty
           throw error;
         }

@@ -7,7 +7,7 @@ import { errorMessage } from '../lib/retry';
 
 export interface KomgaConfig { url: string; auth: 'apiKey' | 'basic'; username: string; secret: string }
 export interface KomgaLink { label: string; url: string }
-export interface KomgaSeries { id: string; libraryId: string; name: string; url: string; metadata: Record<string, unknown> & { links?: KomgaLink[] } }
+export interface KomgaSeries { id: string; libraryId: string; name: string; url: string; deleted?: boolean; metadata: Record<string, unknown> & { links?: KomgaLink[] } }
 export interface KomgaBook { id: string; seriesId: string; name: string; url: string; metadata: Record<string, unknown> }
 export interface KomgaThumbnail { id: string; type: string; selected: boolean }
 export interface Image { bytes: Blob; name: string }
@@ -72,6 +72,7 @@ export class KomgaClient {
     if (response.status === 401) throw new AppError(502, 'komga_auth', 'Komga 拒绝了登录凭据（HTTP 401），请检查 API Key 或用户名和密码');
     if (response.status === 403) throw new AppError(502, 'komga_forbidden', 'Komga 拒绝访问（HTTP 403）：写入元数据需要管理员（ADMIN）权限');
     if (response.status === 413) throw new AppError(502, 'komga_too_large', 'Komga 拒绝了过大的文件（HTTP 413）');
+    if (response.status === 404) throw new AppError(502, 'komga_not_found', 'Komga 返回 HTTP 404');
     if (response.status >= 300 && response.status < 400) throw new AppError(502, 'komga_redirect', `Komga 地址发生了跳转（HTTP ${response.status}），请填写 Komga 的实际访问地址`);
     let detail = '';
     try {

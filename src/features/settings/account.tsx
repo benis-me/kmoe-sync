@@ -10,6 +10,7 @@ import { errorMessage, request } from '@/lib/api';
 import { formatMB, fromNow, percent } from '@/lib/format';
 import { fieldErrors, type FieldErrors } from '@/lib/forms';
 import { mirrorsQuery, settingsQuery, statusQuery } from '@/lib/queries';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardFooter } from '@/components/ui/card';
@@ -49,6 +50,7 @@ function LoginForm({ account, mirror }: { account: KmoeAccount; mirror: string }
   const [password, setPassword] = useState('');
   const [site, setSite] = useState(mirror);
   const [remember, setRemember] = useState(account.remember);
+  useUnsavedChanges(!!password || email !== (account.email ?? '') || site !== mirror || remember !== account.remember);
   const [errors, setErrors] = useState<FieldErrors>({});
   const login = useMutation({
     mutationFn: () => request('POST /api/kmoe/login', { body: { email, password, mirror: site, remember } }),
@@ -186,6 +188,7 @@ function RememberDialog({ account, onClose }: { account: KmoeAccount; onClose: (
   const { open, close } = useClosable(onClose);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  useUnsavedChanges(open && !!password);
   const login = useMutation({
     mutationFn: () => request('POST /api/kmoe/login', { body: { email: account.email ?? '', password, mirror: account.mirror ?? undefined, remember: true } }),
     onSuccess: kmoe => { setAccount(kmoe); toast.success('已开启自动重新登录'); close(); },
@@ -229,7 +232,7 @@ export function AccountSection() {
     {account.state === 'active' && <Card className="gap-0 divide-y py-0">
       <SettingRow label="镜像" htmlFor="preferred-mirror" description="切换时带上现在的登录，新镜像不认就保持原样。">
         {/* The mirror the session uses; while a switch is being checked, the one it goes to. */}
-        <MirrorSelect id="preferred-mirror" value={(patch.isPending && patch.variables?.preferredMirror) || account.mirror || settings.data.preferredMirror} busy={patch.isPending}
+        <MirrorSelect id="preferred-mirror" value={(patch.isPending && typeof patch.variables !== 'function' && patch.variables?.preferredMirror) || account.mirror || settings.data.preferredMirror} busy={patch.isPending}
           onChange={mirror => patch.mutate({ preferredMirror: mirror }, { onSuccess: () => void toast.success(`已切换到 ${mirror}`, { description: '登录状态一起带过去了，不用重新登录。' }) })} />
       </SettingRow>
       <AutoLoginRow account={account} />

@@ -7,6 +7,8 @@ import { LoaderCircle } from 'lucide-react';
 import type { NetworkCheck, Settings } from '@shared/model';
 import { errorMessage, request } from '@/lib/api';
 import { metadataSettingsQuery, settingsQuery } from '@/lib/queries';
+import { useUnsavedChanges } from '@/lib/use-unsaved-changes';
+import { useSettingsDraft } from './use-settings-draft';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -23,13 +25,10 @@ function ProxyForm({ settings }: { settings: Settings }) {
   const client = useQueryClient();
   const patch = usePatchSettings();
   const initial = { proxy: settings.proxy, proxyKmoe: settings.proxyKmoe };
-  const initialKey = JSON.stringify(initial);
-  const [draft, setDraft] = useState(initial);
-  const [base, setBase] = useState(initialKey);
-  if (base !== initialKey) { setBase(initialKey); setDraft(initial); }
+  const { draft, setDraft, dirty, saved } = useSettingsDraft(initial);
+  useUnsavedChanges(dirty);
   const [error, setError] = useState('');
   const [checks, setChecks] = useState<{ key: string; results: NetworkCheck[] } | null>(null);
-  const dirty = JSON.stringify(draft) !== initialKey;
   const proxy = draft.proxy.trim();
   const key = JSON.stringify({ proxy, kmoe: draft.proxyKmoe });
 
@@ -48,7 +47,8 @@ function ProxyForm({ settings }: { settings: Settings }) {
     e.preventDefault();
     if (!dirty || patch.isPending || !valid()) return;
     patch.mutate({ proxy, proxyKmoe: draft.proxyKmoe }, {
-      onSuccess: () => {
+      onSuccess: next => {
+        saved(draft, { proxy: next.proxy, proxyKmoe: next.proxyKmoe });
         toast.success(proxy ? '已保存代理' : '已改为直连');
         void client.invalidateQueries({ queryKey: metadataSettingsQuery.queryKey });
       },
@@ -99,7 +99,7 @@ function ProxyForm({ settings }: { settings: Settings }) {
 
 export function NetworkSection() {
   const settings = useQuery(settingsQuery);
-  if (settings.error) return <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />;
+  if (settings.error && !settings.data) return <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />;
   if (!settings.data) return <SectionSkeleton />;
   return <ProxyForm settings={settings.data} />;
 }

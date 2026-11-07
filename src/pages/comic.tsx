@@ -186,7 +186,7 @@ function ComicView({ detail, loadingView }: { detail: ComicDetail; loadingView: 
               checking={libraryCheck.isPending} onCheck={() => { if (targetId !== null) libraryCheck.mutate(); }} />
             : <EmptyState icon={<Compass />} title="还没有可下载的章节" description="Kmoe 上暂时没有这部漫画的卷或话。订阅后，一有更新就会自动下载。" className="min-h-56 border" />}
           <ActionBar count={chosen.length} sizeMB={sizeMB} remainingMB={kmoe?.state === 'active' ? kmoe.remainingMB : null} reserveMB={settings.data?.quotaReserveMB}
-            reason={reason} busy={start.isPending} progress={progress}
+            reason={reason} busy={start.isPending} progress={progress} targetName={target?.name ?? null} format={format}
             onClear={() => setSelection(() => new Set())} onStart={() => start.mutate(chosen.map(item => item.id))} />
         </div>
         {/* Not sticky: with two cards the column can be taller than the window. */}

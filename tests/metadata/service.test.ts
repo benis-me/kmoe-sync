@@ -267,7 +267,150 @@ function grandBlue(s: ReturnType<typeof setup>) {
   return folderId;
 }
 
+/** Pause after the first remote series write but before its ownership record is saved locally. */
+function pauseWrite(fail = false) {
+  let release = () => {}, arrived = () => {}, paused = false;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const reached = new Promise<void>(resolve => { arrived = resolve; });
+  const net = (next: typeof fetch) => (async (input: string | URL | Request, init?: BunFetchRequestInit) => {
+    if (!paused && init?.method === 'PATCH' && String(input).endsWith('/series/s1/metadata')) {
+      paused = true;
+      const response = fail ? new Response('write failed', { status: 500 }) : await next(input, init);
+      arrived();
+      await gate;
+      return response;
+    }
+    return next(input, init);
+  }) as typeof fetch;
+  return { release, reached, net };
+}
+
 describe('writing to Komga', () => {
+  test.each(['manual', 'tick', 'job'] as const)('%s and manual syncs share a per-folder queue and retain field ownership', async entry => {
+    const gate = pauseWrite(), s = setup({}, gate.net);
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    const id = s.folder('/Same');
+    const series = komga.addSeries('s1', '/Same', { summary: 'User summary', summaryLock: true });
+    await s.metadata.matchFolder(id, { subject: '118165' });
+    let first: Promise<void>;
+    if (entry === 'job') { s.metadata.startSyncJob(s.targetId, true); first = until(() => !s.jobs.busy); }
+    else first = entry === 'tick' ? s.metadata.tick() : s.metadata.syncFolder(id);
+    let second: Promise<void> | undefined;
+    try {
+      await gate.reached;
+      second = s.metadata.syncFolder(id);
+      await Bun.sleep(20);
+      expect(komga.state.requests.filter(request => request === 'GET /api/v1/series/s1')).toHaveLength(1);
+      // The lock is per folder, not global.
+      const other = s.folder('/Other');
+      komga.addSeries('s2', '/Other');
+      await s.metadata.matchFolder(other, { subject: '5297' });
+      await s.metadata.syncFolder(other);
+      expect(s.state(other).komga.state).toBe('synced');
+    } finally { gate.release(); await Promise.all([first, second]); }
+    const written = s.db.query<{ komga_written: string }, [number]>('SELECT komga_written FROM folder_metadata WHERE folder_id = ?').get(id)!;
+    expect(JSON.parse(written.komga_written).series.readingDirection).toBeString();
+    s.metadata.patchSettings({ options: { readingDirection: 'WEBTOON' } });
+    await s.metadata.syncFolder(id);
+    expect(series.metadata).toMatchObject({ readingDirection: 'WEBTOON', summary: 'User summary' });
+  });
+
+  test.each([false, true])('new delayed dirty work survives an in-flight sync (failure: %s)', async fail => {
+    const gate = pauseWrite(fail), s = setup({}, gate.net);
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    const id = s.folder('/Same');
+    komga.addSeries('s1', '/Same');
+    await s.metadata.matchFolder(id, { subject: '118165' });
+    const first = s.metadata.syncFolder(id);
+    let next: string | null = null;
+    try {
+      await gate.reached;
+      const timestamp = s.db.query<{ updated_at: string }, [number]>('SELECT updated_at FROM folder_metadata WHERE folder_id = ?').get(id)!.updated_at;
+      s.metadata.markDirty(id, 15);
+      next = s.row(id).next_attempt_at;
+      // Force the same timestamp: preserving new work cannot rely on wall-clock precision.
+      s.db.run('UPDATE folder_metadata SET updated_at = ? WHERE folder_id = ?', [timestamp, id]);
+    } finally { gate.release(); await first; }
+    expect(s.row(id)).toMatchObject({ dirty: 1, attempts: 0, next_attempt_at: next });
+  });
+
+  test('a queued sync rereads the Bangumi match and comic link; an older write cannot clear the new work', async () => {
+    const gate = pauseWrite(), s = setup({}, gate.net);
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    const id = s.folder('/Same');
+    const series = komga.addSeries('s1', '/Same');
+    await s.metadata.matchFolder(id, { subject: '118165' });
+    const first = s.metadata.syncFolder(id);
+    let second: Promise<void> | undefined;
+    try {
+      await gate.reached;
+      second = s.metadata.syncFolder(id);
+      const comic = s.comic('newcomic', 'NANA', ['矢沢あい'], [], '完結');
+      s.db.run('UPDATE library_folders SET comic_id = ? WHERE id = ?', [comic, id]);
+      s.metadata.markDirty(id);
+      await s.metadata.matchFolder(id, { subject: '5297' });
+    } finally { gate.release(); await Promise.all([first, second]); }
+    expect(s.state(id)).toMatchObject({ bangumi: { subject: { id: 5297 } }, komga: { state: 'synced', dirty: false } });
+    expect(series.metadata).toMatchObject({ title: 'NANA ～世上的另一个我～', links: [
+      { label: 'Bangumi', url: 'https://bgm.tv/subject/5297' }, { label: 'Kmoe', url: 'https://kzo.moe/c/newcomic.htm' },
+    ] });
+  });
+
+  test.each(['rematch', 'unmatch', 'unlink'] as const)('an in-flight sync preserves a newer %s without another sync request', async change => {
+    const gate = pauseWrite(), s = setup({}, gate.net);
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    const comic = s.comic('oldcomic', 'Old comic', [], []);
+    const id = s.folder('/Same', { comicId: comic });
+    komga.addSeries('s1', '/Same');
+    await s.metadata.matchFolder(id, { subject: '118165' });
+    const first = s.metadata.syncFolder(id);
+    try {
+      await gate.reached;
+      if (change === 'rematch') await s.metadata.matchFolder(id, { subject: '5297' });
+      if (change === 'unmatch') s.metadata.unmatchFolder(id);
+      if (change === 'unlink') s.db.run('UPDATE library_folders SET comic_id = NULL WHERE id = ?', [id]);
+    } finally { gate.release(); await first; }
+    expect(s.row(id).dirty).toBe(1);
+    if (change === 'rematch') expect(s.state(id).bangumi.subject?.id).toBe(5297);
+    if (change === 'unmatch') expect(s.state(id).bangumi).toMatchObject({ state: 'none', subject: null });
+    if (change === 'unlink') expect(s.db.query('SELECT comic_id FROM library_folders WHERE id = ?').get(id)).toEqual({ comic_id: null });
+  });
+
+  test('Komga locks changed while Bangumi is loading are read before writing', async () => {
+    let release = () => {}, arrived = () => {};
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const reached = new Promise<void>(resolve => { arrived = resolve; });
+    const s = setup({}, next => (async (input: string | URL | Request, init?: BunFetchRequestInit) => {
+      if (String(input).endsWith('/subjects/118165/persons')) { arrived(); await gate; }
+      return next(input, init);
+    }) as typeof fetch);
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    const id = s.folder('/Same'), series = komga.addSeries('s1', '/Same');
+    await s.metadata.matchFolder(id, { subject: '118165' });
+    const first = s.metadata.syncFolder(id);
+    try {
+      await reached;
+      Object.assign(series.metadata, { summary: 'Just edited by user', summaryLock: true });
+    } finally { release(); await first; }
+    expect(series.metadata.summary).toBe('Just edited by user');
+    expect(s.state(id).komga.state).toBe('synced');
+  });
+
+  test('a changed Komga binding cannot receive an old sync result or ownership record', async () => {
+    const gate = pauseWrite(), s = setup({}, gate.net);
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    const id = s.folder('/Same');
+    komga.addSeries('s1', '/Same');
+    await s.metadata.matchFolder(id, { subject: '118165' });
+    const first = s.metadata.syncFolder(id);
+    try {
+      await gate.reached;
+      s.metadata.patchSettings({ komga: { libraries: [{ targetId: s.targetId, libraryId: 'lib2' }] } });
+    } finally { gate.release(); await first; }
+    expect(s.state(id).komga).toMatchObject({ state: 'pending', seriesId: null, dirty: true });
+    expect(s.db.query('SELECT komga_written FROM folder_metadata WHERE folder_id = ?').get(id)).toEqual({ komga_written: null });
+  });
+
   test('series and books: Kmoe items, file names and Bangumi volumes; a re-sync writes nothing', async () => {
     const s = setup();
     s.configure();
@@ -429,6 +572,71 @@ describe('writing to Komga', () => {
     await expect(s.metadata.syncFolder(id)).rejects.toThrow('匹配');
     s.metadata.patchSettings({ komga: { libraries: [] } });
     expect(() => s.metadata.startSyncJob(s.targetId, true)).toThrow('Komga 书库');
+  });
+});
+
+describe('Komga series lookup', () => {
+  test('a three-folder tick in a 1000-series library reads known ids without listing the library', async () => {
+    const s = setup();
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    for (let i = 0; i < 1000; i++) komga.addSeries(`s${i}`, `/Series ${i}`);
+    for (let i = 0; i < 3; i++) {
+      const id = s.folder(`/Series ${i}`);
+      await s.metadata.matchFolder(id, { subject: '118165' });
+      s.db.run('UPDATE folder_metadata SET komga_series_id = ? WHERE folder_id = ?', [`s${i}`, id]);
+    }
+    await s.metadata.tick();
+    expect(komga.state.requests.filter(request => request === 'POST /api/v1/series/list')).toHaveLength(0);
+    expect(komga.state.requests.filter(request => /^GET \/api\/v1\/series\//.test(request))).toHaveLength(3);
+    expect(komga.state.requests.filter(request => request === 'GET /api/v1/libraries')).toHaveLength(1);
+    expect(komga.state.patches).toHaveLength(3);
+  });
+
+  test.each(['missing', 'wrong library', 'wrong path', 'outside root', 'deleted'] as const)('a stored id with %s falls back and never writes the unrelated series', async failure => {
+    const s = setup();
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    const id = s.folder('/Same');
+    const old = komga.addSeries('old', '/Same');
+    if (failure === 'missing') komga.state.series.length = 0;
+    if (failure === 'wrong library') old.libraryId = 'lib2';
+    if (failure === 'wrong path') old.url = '/data/Other';
+    if (failure === 'outside root') old.url = '/data-other/Same';
+    if (failure === 'deleted') Object.assign(old, { deleted: true });
+    komga.addSeries('new', '/Same');
+    await s.metadata.matchFolder(id, { subject: '118165' });
+    s.db.run("UPDATE folder_metadata SET komga_series_id = 'old' WHERE folder_id = ?", [id]);
+    await s.metadata.syncFolder(id);
+    expect(s.state(id).komga).toMatchObject({ state: 'synced', seriesId: 'new', dirty: false });
+    expect(komga.state.patches.map(patch => patch.id)).toEqual(['new']);
+    expect(komga.state.requests.filter(request => request === 'POST /api/v1/series/list')).toHaveLength(1);
+  });
+
+  test('stale ids share one fallback index within a tick', async () => {
+    const s = setup();
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    for (let i = 0; i < 3; i++) {
+      const id = s.folder(`/Series ${i}`);
+      komga.addSeries(`s${i}`, `/Series ${i}`);
+      await s.metadata.matchFolder(id, { subject: '118165' });
+      s.db.run('UPDATE folder_metadata SET komga_series_id = ? WHERE folder_id = ?', [`missing${i}`, id]);
+    }
+    await s.metadata.tick();
+    expect(komga.state.requests.filter(request => request === 'POST /api/v1/series/list')).toHaveLength(1);
+    expect(komga.state.patches).toHaveLength(3);
+  });
+
+  test('authorization errors on a known id stop without falling back to a full index', async () => {
+    const s = setup({}, next => (async (input: string | URL | Request, init?: BunFetchRequestInit) =>
+      String(input).endsWith('/series/denied') ? new Response('forbidden', { status: 403 }) : next(input, init)) as typeof fetch);
+    s.configure({ bangumi: { source: 'online' }, options: { books: false } });
+    const id = s.folder('/Same');
+    komga.addSeries('other', '/Same');
+    await s.metadata.matchFolder(id, { subject: '118165' });
+    s.db.run("UPDATE folder_metadata SET komga_series_id = 'denied' WHERE folder_id = ?", [id]);
+    await s.metadata.syncFolder(id);
+    expect(s.state(id).komga).toMatchObject({ state: 'error', error: expect.stringContaining('HTTP 403') });
+    expect(komga.state.requests.filter(request => request === 'POST /api/v1/series/list')).toHaveLength(0);
+    expect(komga.state.patches).toHaveLength(0);
   });
 });
 
