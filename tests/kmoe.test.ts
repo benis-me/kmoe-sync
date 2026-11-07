@@ -12,11 +12,19 @@ const TRUSTED = ['kzo.moe', 'mox.moe', '127.0.0.1'];
 const code = async (promise: Promise<unknown>) => { try { await promise; return 'ok'; } catch (error) { return error instanceof KmoeError ? error.code : String(error); } };
 
 describe('parsers (real page fixtures)', () => {
-  it('reads the live detail page: numeric book id differs from the page key', async () => {
-    const detail = await parseDetailPage(readFileSync('tests/fixtures/detail-kzo.html', 'utf8'), '8a3dbd', 'https://kzo.moe');
+  it.each(['data_book', 'Kmoe.book'])('reads a detail page using %s: numeric book id differs from the page key', async (call) => {
+    const html = readFileSync('tests/fixtures/detail-kzo.html', 'utf8').replace('data_book(', `${call}(`);
+    const detail = await parseDetailPage(html, '8a3dbd', 'https://kzo.moe');
     expect(detail).toMatchObject({ key: '8a3dbd', bookId: '31352', title: '渣女沒渣報', authors: ['岸川瑞樹'], status: '連載', language: '繁體', dataHash: '179049020818a3dbd00000000000004b61da' });
     expect(detail.cover).toStartWith('https://kmimg.moex.ink/cover/');
     expect(detail.description).toStartWith('在中學時代時');
+  });
+  it('rejects missing or malformed chapter hashes in both page formats', async () => {
+    const html = readFileSync('tests/fixtures/detail-kzo.html', 'utf8');
+    for (const call of ['', 'Kmoe.book("short")', 'Kmoe.book("validhash", "extra")', 'other.Kmoe.book("validhash")', 'data_book("bad/hash")']) {
+      const page = html.replace(/data_book\(\s*"[^"]+"\s*\)/, call);
+      expect(await code(parseDetailPage(page, '8a3dbd', 'https://kzo.moe'))).toBe('site_changed');
+    }
   });
   it('maps the live volume JSON by index: [7] pages, [9] MOBI MB, [11] EPUB MB', () => {
     const items = parseVolumeData(JSON.parse(readFileSync('tests/fixtures/data-book-kzo.json', 'utf8')));
