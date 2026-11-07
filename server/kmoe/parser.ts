@@ -184,7 +184,8 @@ export async function parseDetailPage(html: string, key: string, origin: string)
   if (!bookId) throw siteChanged('漫画编号');
   const title = plainText(found.title) || plainText(found.docTitle).split(/\s*[:：]\s*/)[0] || '';
   if (!title) throw siteChanged('漫画标题');
-  const hashes = javascriptCalls(html, 'data_book').filter(args => args.length);
+  // Current pages use Kmoe.book; older mirrors still call data_book.
+  const hashes = [...javascriptCalls(html, 'Kmoe.book'), ...javascriptCalls(html, 'data_book')].filter(args => args.length);
   const dataHash = hashes[0]?.[0]?.trim() ?? '';
   if (hashes[0]?.length !== 1 || !/^[0-9a-z]{8,512}$/i.test(dataHash)) throw siteChanged('章节数据标识');
   const cell = plainText(found.authorCell);
