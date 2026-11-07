@@ -15,7 +15,13 @@ export class KmoeSite {
   constructor(readonly client: KmoeClient, private readonly trustedHosts: readonly string[]) {}
 
   private requireSession(response: KmoeResponse, what: string) {
-    if (response.url.pathname.endsWith('/login.php')) throw new KmoeError('login_required', `${what}需要登录 Kmoe`);
+    if (response.url.pathname.endsWith('/login.php')) throw new KmoeError('login_required', `${what}需要登录 Kmoe（${this.diagnose(response)}）`);
+  }
+
+  /** Report the response and current cookie names, never their values. */
+  private diagnose(response: KmoeResponse): string {
+    const cookies = Object.keys(this.client.cookieJar());
+    return `最终地址 ${response.url.pathname}，HTTP ${response.status}，当前 Cookie 名称：${cookies.length ? cookies.join('/') : '无'}`;
   }
 
   /** Posts the password exactly once; never retried or replayed on another mirror. */
@@ -61,7 +67,15 @@ export class KmoeSite {
     }
     const detail = await parseDetailPage(page.text, key, this.client.origin);
     const volumes = await this.client.get('/data_book.php', { query: { h: detail.dataHash }, xhrFrom: path, referer: path, accept: 'json' });
-    return { detail, items: parseVolumeData(jsonOf(volumes, '章节数据')) };
+    this.requireSession(volumes, '章节数据');
+    try {
+      return { detail, items: parseVolumeData(jsonOf(volumes, '章节数据')) };
+    } catch (error) {
+      if (error instanceof KmoeError && error.code === 'login_required') {
+        throw new KmoeError('login_required', `${error.message}（${this.diagnose(volumes)}）`);
+      }
+      throw error;
+    }
   }
 
   async downloadLink(input: { key: string; bookId: string; itemId: string; format: Format; line: Line }): Promise<{ url: string; name: string }> {

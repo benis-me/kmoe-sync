@@ -100,6 +100,8 @@ function httpsUrl(value: string | null | undefined, origin: string): string | nu
 // ---------- Comic identity ----------
 const DETAIL_PATH = /^\/(?:m\/)?c\/([A-Za-z0-9]+)\.htm$/;
 export const COMIC_KEY = /^[A-Za-z0-9]{1,32}$/;
+/** Where the site puts its takedown notice instead of the title: this comic is withheld, whoever is asking. */
+const BLOCKED_TITLE = /內容已屏蔽|内容已屏蔽|內容已被屏蔽|内容已被屏蔽|內容已遮蔽/;
 
 /** Page key from a detail URL/path of any mirror (desktop or /m/ mobile), or null. */
 export function keyFromUrl(value: string, trustedHosts: readonly string[]): string | null {
@@ -184,6 +186,8 @@ export async function parseDetailPage(html: string, key: string, origin: string)
   if (!bookId) throw siteChanged('漫画编号');
   const title = plainText(found.title) || plainText(found.docTitle).split(/\s*[:：]\s*/)[0] || '';
   if (!title) throw siteChanged('漫画标题');
+  // A takedown notice identifies a content restriction without probing or expiring the account.
+  if (BLOCKED_TITLE.test(title)) throw new KmoeError('content_blocked', `Kmoe 屏蔽了这部漫画：${title.slice(0, 60)}`);
   // Current pages use Kmoe.book; older mirrors still call data_book.
   const hashes = [...javascriptCalls(html, 'Kmoe.book'), ...javascriptCalls(html, 'data_book')].filter(args => args.length);
   const dataHash = hashes[0]?.[0]?.trim() ?? '';
@@ -224,8 +228,9 @@ export function parseVolumeData(payload: unknown): RemoteItem[] {
   const rows = data.voldata;
   if (!Array.isArray(rows)) throw siteChanged('章节列表');
   if (Number(data.volcount) !== rows.length) throw siteChanged('章节数量');
-  // An empty list with a blank identity is what the site returns when the page session does not match.
-  if (!rows.length && !String(data.bookname ?? '').trim()) throw new KmoeError('login_required', 'Kmoe 没有返回章节数据，请重试或重新登录');
+  // A blank identity is ambiguous: withSession must check the profile before expiring the account.
+  if (!rows.length && !String(data.bookname ?? '').trim())
+    throw new KmoeError('login_required', 'Kmoe 没有返回这部漫画的章节数据，需要确认登录是否仍然有效');
   return rows.map((row, index) => {
     if (!Array.isArray(row) || row.length < 12) throw siteChanged(`第 ${index + 1} 条章节数据`);
     // Names come HTML-escaped (「娜娜&amp;小八」).

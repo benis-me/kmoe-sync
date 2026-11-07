@@ -28,9 +28,15 @@ describe('parsers (real page fixtures)', () => {
     const row = ['2001', '', '', '番外篇', '1', '第 7.8 卷 - 娜娜&amp;小八粉絲手冊', '', '120', '', '10', '', '12'];
     expect(parseVolumeData({ volcount: 1, voldata: [row] })[0]!.name).toBe('第 7.8 卷 - 娜娜&小八粉絲手冊');
   });
-  it('treats the anonymous empty sentinel as a session problem, never as "no volumes"', async () => {
+  it('requires a session check for an ambiguous empty volume response', async () => {
     expect(await code(Promise.resolve().then(() => parseVolumeData({ msgid: 0, hash: '', bookkey: '', bookname: '', volcount: 0, voldata: [] })))).toBe('login_required');
     expect(await code(Promise.resolve().then(() => parseVolumeData({ volcount: 2, voldata: [] })))).toBe('site_changed');
+  });
+  it('recognises the takedown page the site serves instead of a comic', async () => {
+    const html = `<title>not a title</title><input type="hidden" name="bookid" value="31352">
+      <font class="text_bglight_big">(為符合要求，此書內容已屏蔽。不會說明原因請勿提問)</font>
+      <table><tr><td class="author">作者：</td></tr></table><script>data_book( "179049020818a3dbd00000000000004b61da" );</script>`;
+    expect(await code(parseDetailPage(html, '11293', 'https://kzz.moe'))).toBe('content_blocked');
   });
   it('reads the volume hash from either call form: data_book("…") and Kmoe.book("…")', async () => {
     const page = (call: string) => `<input type="hidden" name="bookid" value="31352">

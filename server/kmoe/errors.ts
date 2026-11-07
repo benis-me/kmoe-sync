@@ -5,6 +5,7 @@ export type KmoeErrorCode =
   | 'account_disabled'
   | 'login_challenge' // the site rejected an automated login; try again later or log in on the website first
   | 'quota_exhausted'
+  | 'content_blocked' // the site withheld this comic (compliance block, level, region…), not a session problem
   | 'refused' // the site refused the action with a message (level, verification, blocked content…)
   | 'site_changed' // the page no longer has the structure we parse
   | 'not_found'

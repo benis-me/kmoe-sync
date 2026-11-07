@@ -10,7 +10,7 @@ export class AppError extends Error {
 
 const KMOE_STATUS: Partial<Record<KmoeError['code'], number>> = {
   login_required: 409, invalid_credentials: 400, account_disabled: 403, login_challenge: 409, quota_exhausted: 409,
-  refused: 409, not_found: 404, rate_limited: 429,
+  content_blocked: 409, refused: 409, not_found: 404, rate_limited: 429,
 };
 
 export function errorResponse(error: unknown): Response {
