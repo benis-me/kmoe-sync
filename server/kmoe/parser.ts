@@ -100,11 +100,6 @@ function httpsUrl(value: string | null | undefined, origin: string): string | nu
 // ---------- Comic identity ----------
 const DETAIL_PATH = /^\/(?:m\/)?c\/([A-Za-z0-9]+)\.htm$/;
 export const COMIC_KEY = /^[A-Za-z0-9]{1,32}$/;
-/**
- * The hash that fetches the volume list (`/data_book.php?h=…`): pages called `data_book("…")` until 2026-10, when the
- * call moved to the `Kmoe` object (`Kmoe.book("…")`). Both forms are still served, so accept either.
- */
-const VOLUME_HASH = /\b(?:data_book|Kmoe\.book)\(\s*["']([0-9A-Za-z]{8,512})["']\s*\)/;
 
 /** Page key from a detail URL/path of any mirror (desktop or /m/ mobile), or null. */
 export function keyFromUrl(value: string, trustedHosts: readonly string[]): string | null {
@@ -184,8 +179,10 @@ export async function parseDetailPage(html: string, key: string, origin: string)
   if (!bookId) throw siteChanged('漫画编号');
   const title = plainText(found.title) || plainText(found.docTitle).split(/\s*[:：]\s*/)[0] || '';
   if (!title) throw siteChanged('漫画标题');
-  const dataHash = VOLUME_HASH.exec(html)?.[1] ?? '';
-  if (!dataHash) throw siteChanged('章节数据标识');
+  // Current pages use Kmoe.book; older mirrors still call data_book.
+  const hashes = [...javascriptCalls(html, 'Kmoe.book'), ...javascriptCalls(html, 'data_book')].filter(args => args.length);
+  const dataHash = hashes[0]?.[0]?.trim() ?? '';
+  if (hashes[0]?.length !== 1 || !/^[0-9a-z]{8,512}$/i.test(dataHash)) throw siteChanged('章节数据标识');
   const cell = plainText(found.authorCell);
   const status = /\bvar\s+bookstatus\s*=\s*"([^"]*)"/.exec(html)?.[1]?.trim() || /狀態\s*[：:]\s*(\S+)/.exec(cell)?.[1] || null;
   return {
