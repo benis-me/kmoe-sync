@@ -2,6 +2,14 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.7] - 2026-11-07
+
+### 修复
+
+- 打开受限漫画时只提示当前内容不可用，不再误判整个 Kmoe 账号失效并暂停其他下载。
+- 空章节响应或登录跳转会先复核账号；复核遇到网络故障时保留登录并按原机制重试，确认会话失效后才触发重新登录。
+- 修复慢请求覆盖新登录状态、并发请求丢失轮换 Cookie 的问题；退出、重新登录和切换镜像后，旧请求不会改写新会话。
+
 ## [0.3.6] - 2026-11-07
 
 ### 新增
@@ -182,6 +190,7 @@
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.3.7]: https://github.com/benis-me/kmoe-sync/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/benis-me/kmoe-sync/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/benis-me/kmoe-sync/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/benis-me/kmoe-sync/compare/v0.3.3...v0.3.4
