@@ -2,6 +2,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.9] - 2026-11-20
+
+### 修复
+
+- 兼容 Kmoe 新版带回调参数的章节调用，恢复漫画详情、追更检查和书库关联，同时保留旧版单参数写法支持。
+
 ## [0.3.8] - 2026-11-07
 
 WebDAV 上传现在需要服务器支持同目录 `MOVE`，并遵守 `Overwrite: F`（不覆盖已有文件）；允许 `DELETE` 可自动清理本次上传的临时文件。
@@ -213,6 +219,7 @@ WebDAV 上传现在需要服务器支持同目录 `MOVE`，并遵守 `Overwrite:
 - 浅色 / 深色主题（跟随系统，可手动切换），适配手机。
 - Docker 镜像（linux/amd64、linux/arm64），支持 PUID / PGID；`--reset-admin` 重置管理员密码。
 
+[0.3.9]: https://github.com/benis-me/kmoe-sync/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/benis-me/kmoe-sync/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/benis-me/kmoe-sync/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/benis-me/kmoe-sync/compare/v0.3.5...v0.3.6

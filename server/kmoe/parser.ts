@@ -188,8 +188,11 @@ export async function parseDetailPage(html: string, key: string, origin: string)
   if (!title) throw siteChanged('漫画标题');
   // A takedown notice identifies a content restriction without probing or expiring the account.
   if (BLOCKED_TITLE.test(title)) throw new KmoeError('content_blocked', `Kmoe 屏蔽了这部漫画：${title.slice(0, 60)}`);
-  // Current pages use Kmoe.book; older mirrors still call data_book.
-  const hashes = [...javascriptCalls(html, 'Kmoe.book'), ...javascriptCalls(html, 'data_book')].filter(args => args.length);
+  // Current Kmoe.book(callback, hash) pages and older single-argument forms share the same hash.
+  const hashes = [
+    ...javascriptCalls(html, 'Kmoe.book').map(args => args.length === 2 ? args.slice(1) : args),
+    ...javascriptCalls(html, 'data_book'),
+  ].filter(args => args.length);
   const dataHash = hashes[0]?.[0]?.trim() ?? '';
   if (hashes[0]?.length !== 1 || !/^[0-9a-z]{8,512}$/i.test(dataHash)) throw siteChanged('章节数据标识');
   const cell = plainText(found.authorCell);

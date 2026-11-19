@@ -46,12 +46,12 @@ describe('parsers (real page fixtures)', () => {
     expect(older.dataHash).toBe('179049020818a3dbd00000000000004b61da');
     expect(current.dataHash).toBe('17935410421X1129300332105314359947f6');
   });
-  it.each(['data_book', 'Kmoe.book'])('keeps script argument parsing and validation for %s', async (name) => {
+  it.each([['data_book', ''], ['Kmoe.book', ''], ['Kmoe.book', 'dispBook, ']])('keeps script argument parsing and validation for %s(%s…)', async (name, callback) => {
     const html = readFileSync('tests/fixtures/detail-kzo.html', 'utf8');
     const page = (call: string) => html.replace(/data_book\(\s*"[^"]+"\s*\)/, call);
-    const detail = await parseDetailPage(page(`other.${name}("wronghash"); ${name}("17904902" + "0818a3dbd00000000000004b61da")`), '8a3dbd', 'https://kzo.moe');
+    const detail = await parseDetailPage(page(`other.${name}("wronghash"); ${name}(${callback}"17904902" + "0818a3dbd00000000000004b61da")`), '8a3dbd', 'https://kzo.moe');
     expect(detail.dataHash).toBe('179049020818a3dbd00000000000004b61da');
-    for (const call of ['', `${name}("short")`, `${name}("validhash", "extra")`]) {
+    for (const call of ['', `${name}(${callback}"short")`, `${name}(${callback}"validhash", "extra")`]) {
       expect(await code(parseDetailPage(page(call), '8a3dbd', 'https://kzo.moe'))).toBe('site_changed');
     }
   });
